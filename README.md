@@ -35,6 +35,20 @@ Options: `-HerdrHome <path>` / `HERDR_APP_HOME`, `-Branch <name>` / `BRANCH`,
 `node`; without either, add the `mod:abdh-editor` block from
 `keys.snippet.json` by hand.
 
+### Install with an agent
+
+Point any coding agent at the repository and say:
+
+> Install the abdh Herdr theme from https://github.com/abdh01h/herdr-abdh-theme —
+> read `AGENT_INSTALL.md` and do it end to end, then switch the layout and show
+> me the check/status output.
+
+The repo ships the brief (`AGENT_INSTALL.md`), a root `AGENTS.md`, and a
+Claude Code skill at `.claude/skills/abdh-install/SKILL.md`. With the repository
+as the working project, “install abdh” is enough. To make the skill available
+from any project, copy that folder to `~/.claude/skills/` (the installer does
+not do this automatically).
+
 ### Manual
 
 Herdr reads `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides it). Back it up first.
