@@ -24,7 +24,7 @@ Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by
 | Part | Behavior |
 |---|---|
 | Left rail | Spaces (machines, worktrees, drag reorder, right-click menus) + agent list, both restyled but behavior-compatible |
-| Top-right icons | Files / Agents / System panel tabs + Git (branches, checkout, create, merge) beside the window buttons |
+| Top-right icons | Files / Agents / System panel tabs + Git (branches, history, checkout, create, merge) beside the window buttons |
 | Files (right panel) | Real tree, file-type badges, git status colors, create/rename/delete/copy/paste, context menu, name + content search (git grep / ripgrep) |
 | Editor (mod pane) | Edit and save files, dirty state, external-change reload/overwrite, file tabs, **Diff** (HEAD → buffer), **Blame** (whole file), unsaved-change prompts |
 | Status bar | Folder, branch, ahead/behind, change counts; file language, lines, chars, words, EOL, encoding, save key |

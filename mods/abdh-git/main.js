@@ -17,6 +17,7 @@ import { READ, REF_FORMAT, parseStatus, parseBranches, parseBlame, parseFileBlam
 
 const MODES = [
   { id: "branches", label: "Branches" },
+  { id: "history", label: "History" },
   { id: "create", label: "New branch" },
   { id: "merge", label: "Merge" },
 ];
@@ -53,7 +54,7 @@ function refreshSeconds() {
 export default class AbdhGit extends View {
   init(_props, cx) {
     const p = props() ?? {};
-    this.mode = p.action === "create" || p.action === "merge" ? p.action : "branches";
+    this.mode = ["create", "merge", "history"].includes(p.action) ? p.action : "branches";
     this.wantedBranch = p.branch ?? null;
     this.selected = null;
     this.confirm = null;
@@ -64,6 +65,7 @@ export default class AbdhGit extends View {
     this.dirty = new Set();
     this.blameInfo = null;
     this.fileBlame = null;
+    this.history = { loading: false, rows: [], error: null };
     this.focused = new Set();
 
     this.state = {
@@ -137,6 +139,48 @@ export default class AbdhGit extends View {
     return all[0]?.folder || home();
   }
 
+  loadHistory(cx) {
+    const root = this.state.root;
+    if (!root) { this.history = { loading: false, rows: [], error: this.state.error || "no repository" }; return; }
+    if (this.history.loading) return;
+    this.history = { loading: true, rows: this.history.rows ?? [], error: null };
+    cx.spawn(async (cx) => {
+      const r = await runGit(root, ["--no-optional-locks", "log", "-n", "150", "--date=unix",
+        "--pretty=format:%H%x00%h%x00%an%x00%at%x00%s%x00%D"]);
+      if (!r.ok) this.history = { loading: false, rows: [], error: (r.err || "git log failed").trim() };
+      else {
+        const rows = r.out.split("\n").filter(Boolean).map((line) => {
+          const [hash, short, author, time, subject, refs] = line.split("\0");
+          return { hash, short, author, time: Number(time) || null, subject, refs };
+        });
+        this.history = { loading: false, rows, error: null };
+      }
+      cx.notify();
+    });
+  }
+
+  historyBody(t) {
+    const h = this.history ?? { loading: false, rows: [], error: null };
+    if (h.error) return div().p(16).text_color(t.blocked).text_size(11).child(h.error);
+    if (h.loading && !h.rows.length) return div().p(16).text_color(t.dim).child("Reading commits\u2026");
+    if (!h.rows.length) return div().p(16).text_color(t.dim).child("No commits");
+    return v_flex().flex_1().min_h(0).overflow_y_scrollbar()
+      .child(h_flex().h(24).flex_none().px(12).items_center().gap(8).border_b(1).border_color(t.border).text_size(10).text_color(t.dim)
+        .child(div().font_semibold().child("COMMITS"))
+        .child(div().flex_1())
+        .child(div().child(`${h.rows.length}${h.loading ? " \u00b7 refreshing" : ""}`)))
+      .children(h.rows.map((c, i) => h_flex().id(`gh-${c.short}-${i}`).py(6).px(12).gap(9).items_center()
+        .border_b(1).border_color(t.border)
+        .when(i % 2 === 0, (x) => x.bg(t.surface))
+        .child(div().w(58).flex_none().text_size(10).text_color(t.accent).child(c.short))
+        .child(v_flex().flex_1().min_w(0).gap(1)
+          .child(div().truncate().text_size(11.5).text_color(t.foreground).child(c.subject || "(no subject)"))
+          .child(h_flex().gap(7).items_center().text_size(9.5).text_color(t.dim)
+            .child(div().child(c.author || "unknown"))
+            .when(Boolean(c.time), (x) => x.child(div().child(ago(c.time))))
+            .when(Boolean(c.refs), (x) => x.child(div().min_w(0).truncate().text_color(t.muted).child(c.refs)))))));
+  }
+
   refresh(cx) {
     if (this.refreshing) return;
     this.refreshing = true;
@@ -148,6 +192,7 @@ export default class AbdhGit extends View {
       } finally {
         this.refreshing = false;
       }
+      if (this.mode === "history") this.loadHistory(cx);
       cx.notify();
     });
   }
@@ -324,6 +369,7 @@ export default class AbdhGit extends View {
     this.mode = id;
     this.confirm = null;
     this.notice = "";
+    if (id === "history") this.loadHistory(cx);
     if (id === "create") {
       if (!this.sourceValue) {
         const source = this.state.branch || "HEAD";
@@ -952,7 +998,8 @@ export default class AbdhGit extends View {
       .when(Boolean(this.blameInfo), (el) => el.child(this.blameCard(t)))
       .when(Boolean(this.notice), (el) => el.child(notice))
       .when(this.mode === "create", (el) => el.child(this.createForm(t)).child(this.listBody(t, cx)))
-      .when(this.mode !== "create", (el) => el.child(this.listBody(t, cx)));
+      .when(this.mode === "history", (el) => el.child(this.historyBody(t)))
+      .when(this.mode !== "create" && this.mode !== "history", (el) => el.child(this.listBody(t, cx)));
 
     // Bottom: the confirm step takes over from the normal action bar.
     const confirmBar = () =>
@@ -976,6 +1023,7 @@ export default class AbdhGit extends View {
         .child(this.button(t, "abdh-git-confirm", this.busy ? "Working\u2026" : "Confirm", true, (c) => this.execute(c)));
 
     const actionHint = (() => {
+      if (this.mode === "history") return `${this.history.rows.length} commits \u00b7 read-only`;
       if (this.mode === "create") return `From ${this.sourceValue || st.branch || "HEAD"}`;
       if (this.mode === "merge") {
         if (!this.selected) return "Select a branch to merge";
@@ -1019,7 +1067,7 @@ export default class AbdhGit extends View {
         div()
           .text_size(9.5)
           .text_color(t.dim)
-          .child(`\u2191\u2193 select \u00b7 \u21b5 act \u00b7 esc close \u00b7 refresh ${secs}s`),
+          .child(this.mode === "history" ? `esc close \u00b7 refresh ${secs}s` : `\u2191\u2193 select \u00b7 \u21b5 act \u00b7 esc close \u00b7 refresh ${secs}s`),
       );
 
     return v_flex()
@@ -1044,6 +1092,7 @@ export default class AbdhGit extends View {
       cx.stop_propagation();
       return;
     }
+    if (this.mode === "history") return;
     if (this.focused.size > 0) return;
     if (e.key === "down" || e.key === "up") {
       this.moveSelection(e.key === "down" ? 1 : -1);
