@@ -112,8 +112,10 @@ export default class Explorer extends View {
     this.lastCmd = null;
     this.lastOpen = null;
     if (props()?.dialog) { this.startDialog(); return; }
-    cx.timer.every(8000, (cx) => this.refresh(cx));
-    cx.timer.every(1500, (cx) => this.consume(cx));
+    // Render-time spawns do not run; poll shared commands and folder state
+    // from timer tasks instead (the editor opening was stalled by this).
+    cx.timer.every(400, (cx) => this.refresh(cx));
+    cx.timer.every(150, (cx) => this.consume(cx));
     this.refresh(cx);
   }
 
@@ -561,8 +563,6 @@ export default class Explorer extends View {
       if (!this.dialog) this.startDialog();
       return this.dialogView(t);
     }
-    this.consume(cx);
-    this.refresh(cx);
     const root = v_flex().id("abdh-explorer").size_full().min_h(0).bg(t.chrome).text_size(12.5).text_color(t.foreground);
     root.child(this.header(t, cx));
     root.child(this.searchBar(t, cx));

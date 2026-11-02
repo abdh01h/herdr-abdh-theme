@@ -89,6 +89,9 @@ export default class EditorPane extends View {
     this.handle = cx.focus_handle();
     const p = props() ?? {};
     this.root = p.root ?? null;
+    // Shared open requests arrive while another mod is rendering. A spawn made
+    // from render never runs, so poll from a timer instead.
+    cx.timer.every(150, (cx) => this.consume(cx));
     if (p.path) cx.spawn(async (cx) => { await this.open(p.path, cx); });
     cx.spawn(async (cx) => {
       for (;;) {
@@ -432,7 +435,6 @@ export default class EditorPane extends View {
   }
 
   render(cx) {
-    this.consume(cx);
     const t = theme();
     const f = this.active();
     const close = this.pending?.kind === "close" ? this.files.find((x) => x.id === this.pending.id) : null;
