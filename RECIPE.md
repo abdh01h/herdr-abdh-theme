@@ -38,6 +38,7 @@ Type: JetBrains Mono 13 for terminals/editor, Geist for chrome. Palette: backgro
 
 ## Watch out
 
+- Each Editor needs its own element id (`Editor.new(state).id("ed-code-<file>")`): without it GPUI reuses the previous native view when tabs switch and the editor paints blank. Keep the loading placeholder too, or a pending read looks like an empty file.
 - The editor API exposes no cursor, selection or decoration hooks. Diff is a separate view and blame is whole-file; there is no inline gutter. A text Copy/Paste menu cannot be implemented because mods cannot read the editor selection or dispatch native editor actions.
 - The editor’s selection colour is unset by the shell, so Base falls back to its `accent` at 40 %. The app maps Base `accent` from the theme’s `hover` (near-background). `abdh-chrome` republishes Base tokens with `set_theme` (from `gpui-base`; `cx.theme()` is flattened — use `.colors`, not `.tokens`) so selection is visible. Without that sync, selection looks absent.
 - Windows CPU usage: `Win32_PerfRawData_PerfOS_Processor.PercentProcessorTime` is the **inverted** counter; usage is `100 − Δ/Δt×100`. The original probe showed idle as load.
