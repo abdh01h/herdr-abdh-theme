@@ -4,9 +4,38 @@ A compact, Carbon-inspired Herdr workspace: a left rail for spaces and agents, a
 
 ![abdh](preview.png)
 
+*Screenshot uses a demo project, not a personal workspace.*
+
 Built for [Herdr](https://herdr.dev) 0.1.12. Tested on Windows 11; the system probes also have Linux and macOS paths, tinted by the current theme.
 
 ## Install
+
+### One command
+
+Windows (PowerShell):
+
+```powershell
+powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.ps1 | iex"
+```
+
+macOS / Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
+```
+
+The installer downloads this repository, backs up every file or folder it replaces
+(`*.bak-<timestamp>`), installs the theme, layout and mods into the Herdr home,
+merges the editor keys while keeping any chord you already use, runs
+`herdr-app check` on each `abdh-*` mod, and switches to the layout when a window
+is running.
+
+Options: `-HerdrHome <path>` / `HERDR_APP_HOME`, `-Branch <name>` / `BRANCH`,
+`-NoLayout` / `NO_LAYOUT=1`. On Linux/macOS the key merge needs `python3` or
+`node`; without either, add the `mod:abdh-editor` block from
+`keys.snippet.json` by hand.
+
+### Manual
 
 Herdr reads `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides it). Back it up first.
 
