@@ -1,0 +1,185 @@
+{
+  "id": "root",
+  "type": "row",
+  "titlebar": "none",
+  "traffic_lights": [
+    12,
+    16
+  ],
+  "theme": "abdh",
+  "preview": "layouts/abdh.svg",
+  "background": "canvas",
+  "font": "JetBrains Mono",
+  "font_size": 13,
+  "ui_font": "Geist",
+  "terminal_padding": [
+    8,
+    10
+  ],
+  "divider": {
+    "width": 1,
+    "color": "border"
+  },
+  "children": [
+    {
+      "id": "sidebar",
+      "type": "column",
+      "size": {
+        "px": 256
+      },
+      "min": 44,
+      "max": 420,
+      "background": "chrome",
+      "resizable": false,
+      "children": [
+        {
+          "id": "brand",
+          "type": "block",
+          "size": {
+            "px": 40
+          },
+          "window_drag": true,
+          "content": {
+            "mod": "abdh-chrome",
+            "props": {
+              "role": "brand"
+            }
+          }
+        },
+        {
+          "id": "spaces",
+          "type": "block",
+          "size": {
+            "weight": 1
+          },
+          "min": 90,
+          "content": {
+            "mod": "abdh-spaces"
+          }
+        },
+        {
+          "id": "agents",
+          "type": "block",
+          "size": {
+            "weight": 1
+          },
+          "min": 90,
+          "content": {
+            "mod": "abdh-agents-list"
+          }
+        },
+        {
+          "id": "sidebar-footer",
+          "type": "block",
+          "size": {
+            "px": 66
+          },
+          "content": {
+            "mod": "abdh-chrome",
+            "props": {
+              "role": "footer"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "type": "column",
+      "resizable": false,
+      "children": [
+        {
+          "id": "tabs",
+          "type": "block",
+          "size": {
+            "px": 32
+          },
+          "window_drag": true,
+          "content": {
+            "mod": "abdh-tabs"
+          }
+        },
+        {
+          "id": "work-body",
+          "type": "row",
+          "padding": 6,
+          "gap": 6,
+          "children": [
+            {
+              "id": "main",
+              "type": "block",
+              "content": {
+                "tab": "active",
+                "pane": {
+                  "gap": 6,
+                  "radius": 8,
+                  "background": "background",
+                  "lone": true,
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  },
+                  "focus": {
+                    "width": 1,
+                    "color": "#3d3d3d"
+                  }
+                }
+              }
+            },
+            {
+              "id": "panel",
+              "type": "column",
+              "size": {
+                "px": 360
+              },
+              "min": 260,
+              "max": 760,
+              "background": "chrome",
+              "children": [
+                {
+                  "id": "panel-body",
+                  "type": "stack",
+                  "active": "panel-files",
+                  "children": [
+                    {
+                      "id": "panel-files",
+                      "type": "block",
+                      "content": {
+                        "mod": "abdh-explorer"
+                      }
+                    },
+                    {
+                      "id": "panel-agents",
+                      "type": "block",
+                      "content": {
+                        "mod": "abdh-agents"
+                      }
+                    },
+                    {
+                      "id": "panel-system",
+                      "type": "block",
+                      "content": {
+                        "mod": "abdh-system"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "status",
+          "type": "block",
+          "size": {
+            "px": 24
+          },
+          "content": {
+            "mod": "abdh-status"
+          }
+        }
+      ]
+    }
+  ],
+  "movable": false
+}

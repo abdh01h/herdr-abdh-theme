@@ -1,0 +1,4 @@
+# Local-only files
+abdh-settings.json
+abdh-recovery/
+*.log

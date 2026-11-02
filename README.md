@@ -1,0 +1,71 @@
+# abdh — a Carbon Herdr layout
+
+A compact, Carbon-inspired Herdr workspace: a left rail for spaces and agents, an icon-tabbed panel on the right (Files, Agents, System), an editor with diff and blame, git branch/merge actions, and a bottom file/git status bar.
+
+![abdh](preview.png)
+
+Built for [Herdr](https://herdr.dev) 0.1.12. Tested on Windows 11; the system probes also have Linux and macOS paths, tinted by the current theme.
+
+## Install
+
+Herdr reads `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides it). Back it up first.
+
+1. `themes/abdh.json` → `~/.config/herdr-app/themes/`
+2. `layouts/abdh.json`, `layouts/abdh.svg` → `~/.config/herdr-app/layouts/`
+3. every `mods/abdh-*` folder → `~/.config/herdr-app/mods/`
+4. merge `keys.snippet.json` into `~/.config/herdr-app/keys.json`
+5. `herdr-app check ~/.config/herdr-app/mods/abdh-<name>` for each folder, then
+   `herdr-app do layout.switch --name abdh`
+
+Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by `abdh-settings` (open it from the sidebar footer → **abdh settings**).
+
+## What you get
+
+| Part | Behavior |
+|---|---|
+| Left rail | Spaces (machines, worktrees, drag reorder, right-click menus) + agent list, both restyled but behavior-compatible |
+| Top-right icons | Files / Agents / System panel tabs + Git (branches, checkout, create, merge) beside the window buttons |
+| Files (right panel) | Real tree, file-type badges, git status colors, create/rename/delete/copy/paste, context menu, name + content search (git grep / ripgrep) |
+| Editor (mod pane) | Edit and save files, dirty state, external-change reload/overwrite, file tabs, **Diff** (HEAD → buffer), **Blame** (whole file), unsaved-change prompts |
+| Status bar | Folder, branch, ahead/behind, change counts; file language, lines, chars, words, EOL, encoding, save key |
+| Agents panel | Real agent/token analytics from agent session logs, totals by agent/session/model, history charts |
+| System panel | Real CPU/RAM/GPU/storage/network/battery via OS probes, traffic-light meters, configurable intervals |
+| Settings | `abdh-settings.json`: appearance, tabs, explorer, agents, system, status bar, git; paged theme picker |
+
+## Keys
+
+Added under `mod:abdh-editor` (active while an editor pane has focus):
+
+```json
+"mod:abdh-editor": {
+  "ctrl-s": "abdh-editor.save",
+  "cmd-s": "abdh-editor.save",
+  "ctrl-w": "abdh-editor.close",
+  "cmd-w": "abdh-editor.close",
+  "ctrl-shift-s": "abdh-editor.saveas",
+  "cmd-shift-s": "abdh-editor.saveas"
+}
+```
+
+The editor also has **Diff**, **Blame**, **Save** and a pane-close button. `abdh-editor.diff` and `abdh-editor.close` are also callable as commands.
+
+## Requirements and limits
+
+- **Search:** content search uses `git grep` inside repos (single-threaded); elsewhere ripgrep, capped to two threads and depth 12. At the home folder content search is intentionally off. Name search needs nothing extra.
+- **Temperature:** real CPU core temps need [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running (read from its WMI namespace). Without it the card says `temp unavailable`; Windows ACPI thermal zones are not shown as CPU temp.
+- **Blame** is whole-file, not per-line: `EditorState` exposes no cursor position.
+- **Diff** is a separate read-only view, not an inline gutter: the editor API exposes no decorations.
+- Remote (ssh machine) files open read-only in the editor.
+- Pane dragging is disabled (`"movable": false`) so the top-center grip never covers content.
+- Herdr's own Settings → Look draws one card per theme file; this repo ships a paged theme picker in **abdh settings → Themes** instead.
+- `abdh-spaces` and `abdh-agents-list` are derived from Herdr's Apache-2.0 `spaces`/`agents` mods; the token scanner in `abdh-agents` is derived from the `insights` mod. See `NOTICE`.
+
+## Layout files
+
+- `layouts/abdh.json` — the window tree (left rail, work area, right panel, status bar), theme `abdh`, no pane headers, `movable: false`.
+- `themes/abdh.json` — Carbon palette with `selection` and component colors.
+- `.claude/skills/abdh-theme/SKILL.md` — an agent skill for installing, verifying and modifying this theme.
+
+## License
+
+Apache-2.0. See `LICENSE` and `NOTICE`.

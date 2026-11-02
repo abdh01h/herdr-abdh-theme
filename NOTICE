@@ -1,0 +1,19 @@
+abdh — Herdr layout and theme
+Copyright 2026 Abdullah (abdh01h)
+
+This repository is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party and derived work
+----------------------------
+
+Herdr (https://github.com/herdrdev/herdr-app), Apache License 2.0.
+
+- mods/abdh-spaces is a fork of Herdr's default `spaces` mod.
+- mods/abdh-agents-list is a fork of Herdr's default `agents` mod.
+- mods/abdh-agents/tokens.mjs derives from Herdr's `insights` token scanner
+  (mods/insights/analytics.js) and reads the user's own agent session logs.
+- Icon shapes follow Lucide icons (ISC) as used by Herdr.
+
+Changes from the originals are limited to styling, layout ids, empty-machine
+row handling, and the self-opening sort menu name. The Apache-2.0 license and
+this notice apply to the derived files.

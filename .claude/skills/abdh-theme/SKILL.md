@@ -1,0 +1,105 @@
+---
+name: abdh-herdr-theme
+description: Work on the abdh Herdr layout/theme in this repository — install it into ~/.config/herdr-app, verify it, change its Carbon palette, layout blocks, tabs, editor, or Files/Agents/System panels, and publish updates. Use when the user mentions abdh, the Herdr theme/layout, its editor or panels, or asks to install/update this project.
+---
+
+# abdh Herdr theme
+
+This repo is a Herdr **layout bundle**: one layout + theme + the personal mods it
+references. Herdr runs it from `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides).
+
+```
+layouts/abdh.json      window tree (left rail, tabs, work area, right panel, status)
+layouts/abdh.svg       layout picker preview
+themes/abdh.json       Carbon palette (background/foreground/selection/cursor/ansi/colors)
+mods/abdh-*            layout, panels, editor, tabs, settings, git, system probes
+keys.snippet.json      keys.json section to merge (editor save/close)
+preview.png, RECIPE.md publishing metadata
+```
+
+## Install or update on this machine
+
+1. Copy `themes/abdh.json` to `~/.config/herdr-app/themes/`.
+2. Copy `layouts/abdh.json` and `layouts/abdh.svg` to `~/.config/herdr-app/layouts/`.
+3. Copy every `mods/abdh-*` folder to `~/.config/herdr-app/mods/` (replace).
+4. Merge `keys.snippet.json` into `~/.config/herdr-app/keys.json` (do not drop
+   existing sections; on conflict ask before replacing a user key).
+5. Check each mod, then switch the layout:
+
+```sh
+for m in ~/.config/herdr-app/mods/abdh-*; do herdr-app check "$m"; done
+herdr-app do layout.switch --name abdh
+herdr-app status   # expect layout "abdh", errors []
+```
+
+Herdr rewrites `~/.config/herdr-app/frame/` at every start. Never fix things
+there. Shipped mods (`spaces`, `agents`, `menu`, `new-menu`, `pane`, `picker`)
+are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
+
+## Where to change what
+
+- **Palette / density**: `themes/abdh.json` (`background`, `foreground`,
+  `selection`, 16 `ansi`, `colors` overrides such as `chrome`, `surface`,
+  `raised`, `accent`, `border`, `done`, `blocked`). Panel colors that are not
+  named there are derived by Herdr, so prefer named overrides.
+- **Layout structure**: `layouts/abdh.json`. Keep ids unique — a collision
+  between the sidebar `agents` block and a panel stack child once moved the
+  token panel into the left rail (panel children are `panel-files`,
+  `panel-agents`, `panel-system`). Root flags: `theme`, `movable: false`,
+  `titlebar: "none"`, `traffic_lights`, `preview`.
+- **Top-right tools / app tabs**: `mods/abdh-tabs/main.js` (`panelButton`,
+  the Git button, plus button, active-tab styling). Panel selection uses
+  `layout.show`/`layout.hide`/`layout.select` with `panel-body`.
+- **Files**: `mods/abdh-explorer/main.js` — tree, dialogs, context menu,
+  clipboard, search. Keep search bounded (`git grep` in repos, `rg -j 2
+  --max-depth 12` otherwise, content search off at `~`); unbounded scans spike
+  the CPU.
+- **Editor**: `mods/abdh-editor/main.js` — save/dirty, external-change flow,
+  file tabs, `lineDiff`, blame hand-off, pane close. `EditorState` has no
+  cursor/selection/decorations, so do not promise inline gutters or a text
+  Copy/Paste menu.
+- **Selection color**: the shell paints an unset editor selection with Base
+  `accent` at 40 %, and the app maps `accent` from the theme's `hover`.
+  `abdh-chrome` republishes Base tokens with `set_theme` from **gpui-base**
+  (use `cx.theme().colors`, not `.tokens`). Keep that sync or selection becomes
+  invisible.
+- **Panels**: `abdh-agents/src` (tokens from agent session logs), `abdh-system`
+  (`probes/windows.js`, `probes/linux.js`, `probes/macos.js`), `abdh-git`,
+  `abdh-status`, `abdh-settings` (its own `abdh-settings.json`, paged themes),
+  `abdh-menu`.
+
+## Gotchas that already cost time
+
+- Windows CPU raw counter is inverted: `usage = 100 − Δ(PercentProcessorTime)/Δt×100`.
+- Real CPU temperature needs LibreHardwareMonitor (WMI) or admin ACPI; ACPI
+  thermal-zone perf counters are ambient, not core temperature.
+- Herdr Settings → Look renders a card per theme file and interrupts with a
+  large library. Use the paged theme picker in `abdh-settings → Themes`.
+- `movable: false` is intentional: it removes the pane grip that covered content.
+- Dialog copies of the explorer must not start timers/watchers or consume shared
+  commands, and menu commands are one-shot — otherwise reloads flood overlays.
+- Remote (ssh) files are read-only in the editor.
+- App/tab close writes dirty buffers to `~/.config/herdr-app/abdh-recovery/`.
+
+## Verify before saying done
+
+```sh
+herdr-app check <mod dir>                     # every changed mod
+herdr-app do layout.switch --name abdh
+herdr-app status                              # layout + errors
+herdr-app shot /tmp/abdh.png                  # visual proof
+```
+
+Exercise the changed surface: open a file and save it (mtime changes), select
+text (highlight visible), toggle Diff on a modified file, switch panel icons,
+search a repo for a string, and compare the System CPU reading with
+`Get-Counter '\Processor(_Total)\% Processor Time'`.
+
+## Publish an update
+
+```sh
+git add -A && git commit -m "..." && git push
+```
+
+Keep the GitHub topic `herdr-layout`, refresh `preview.png` when the look
+changes, and update `RECIPE.md` with any behavior that changed.
