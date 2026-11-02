@@ -13,7 +13,10 @@ const DEFAULTS = { explorer: { icons: true, gitColors: true, hiddenFiles: false,
 const settings = () => ({ ...DEFAULTS, ...(shared("abdh.settings") ?? {}) });
 
 function location() {
+  const shown = props() ?? {};
   const space = spaces().find((s) => s.active), f = focused();
+  // A layout can pin the panel to a folder (a preview, a docs tree).
+  if (shown.root) return { cwd: shown.root, on: shown.on ?? null, space: space?.id, tab: f?.tab };
   const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
   // A mod pane (editor, panel tab) has no folder: follow the tab's terminal instead,
   // then the space's folder. Otherwise Files follows the editor to the home folder.
