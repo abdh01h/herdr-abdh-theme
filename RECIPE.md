@@ -26,7 +26,7 @@ Type: JetBrains Mono 13 for terminals/editor, Geist for chrome. Palette: backgro
 - Blame: whole file, line numbers, short hash, author, relative date, source line, tooltip with the commit summary; uncommitted lines are labelled.
 - Agents panel: live agent list plus real token totals (input/output/cached/total), per agent/session/model and hour/day/month history, measured vs estimated distinguished.
 - System panel: CPU model/cores/threads/usage/per-core/frequency/temp; GPU(s) usage/VRAM/temp/clock; RAM/swap; every fixed disk; network rates; OS, arch, hostname, uptime, battery. Meters: normal <70 %, amber 70–90 %, red ≥90 %.
-- Settings (sidebar footer): Appearance, Themes, Tabs, Explorer, Agents, System, Status bar, Git; every edit writes `abdh-settings.json` immediately and republishes shared state. Themes list is paged (24/page) and filtered, because Herdr's own Settings draws a full card per theme file.
+- Settings (sidebar footer): Appearance, Themes, Tabs, Explorer, Agents, System, Status bar, Git, Updates; every edit writes `abdh-settings.json` immediately and republishes shared state. Themes list is paged (24/page) and filtered, because Herdr's own Settings draws a full card per theme file. Updates compares the installed files with `main` on GitHub by git blob sha1 (`updates.js`) and starts the repository's own installer detached; it polls `abdh-update/install.result`, then re-checks and re-applies the layout when the shown theme is Agentee.
 
 ## Built from
 
@@ -50,6 +50,8 @@ Type: JetBrains Mono 13 for terminals/editor, Geist for chrome. Palette: backgro
 - Windows CPU usage: `Win32_PerfRawData_PerfOS_Processor.PercentProcessorTime` is the **inverted** counter; usage is `100 − Δ/Δt×100`. The original probe showed idle as load.
 - Real CPU temperature on Windows needs admin ACPI or LibreHardwareMonitor. ACPI thermal-zone perf counters are ambient, not core, and are deliberately not shown as CPU temp.
 - Herdr's Settings → Look interrupts with many theme files. Keep the theme picker inside `abdh-settings`, which pages and filters.
+- Mods get a sandboxed `fs/promises` subset, not Node's: `mkdir`, `readFile`, `readdir`, `writeFile`, `unlink`, `rmdir`, `exists` only (no `stat`, no `rm -r`, no `chmod`), and paths outside the app folder are refused. There is no `Buffer`, `TextEncoder` or `fetch` either. The update check therefore downloads the repository tarball into `<app-home>/abdh-update/` and walks it with `readdir`; cleanups recurse by hand.
+- Herdr reloads a mod when its files change. Installing replaces `abdh-settings` itself, so the panel's poll for `install.result` usually ends with the instance: the reloaded panel re-checks on open instead (`updates.checkOnOpen`). Errors before the copy (no curl, no tar, no network) still reach the panel and the log at `<app-home>/abdh-update/install.log`.
 - Shipped mods are rewritten at startup. These are personal copies; do not edit `~/.config/herdr-app/frame/*` or expect changes there to persist.
 - Layout ids must stay unique (`panel-agents` vs `agents`); a collision moved the token panel into the left rail.
 - `movable: false` removes the pane drag grip. Splitting/zooming/closing still works via keys and the terminal menu.

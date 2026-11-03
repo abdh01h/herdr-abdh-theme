@@ -73,7 +73,7 @@ Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by
 | Status bar | Folder, branch, ahead/behind, change counts (the open editor file's project root when the editor is focused); file language, lines, chars, words, EOL, encoding, save key |
 | Agents panel | Real agent/token analytics from agent session logs, totals by agent/session/model, history charts |
 | System panel | Real CPU/RAM/GPU/storage/network/battery via OS probes, traffic-light meters, configurable intervals |
-| Settings | `abdh-settings.json`: appearance, tabs, explorer, agents, system, status bar, git; paged theme picker |
+| Settings | `abdh-settings.json`: appearance, tabs, explorer, agents, system, status bar, git, updates; paged theme picker; **Updates** checks `main` by file content and installs from the panel |
 
 ## Keys
 

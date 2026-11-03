@@ -1,8 +1,12 @@
 // Agentee settings: the theme's own control panel.
 //
 // Opened as an overlay with props { section? } — "appearance" | "tabs" |
-// "explorer" | "agents" | "system" | "status" | "git". A left rail switches
-// sections; the body scrolls.
+// "explorer" | "agents" | "system" | "status" | "git" | "updates". A left rail
+// switches sections; the body scrolls.
+//
+// Updates compares the installed files with the repository's main (see
+// updates.js) and runs the official installer from here; the install itself is
+// detached, so this panel only starts it and polls `install.result`.
 //
 // This mod owns `abdh.settings`: it loads `abdh-settings.json` from appHome(),
 // merges the defaults below, publishes the result with setShared so the other
@@ -11,8 +15,9 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { appHome, closeOverlay, props, readTextFile, setShared, shared, theme, themes, settings, run } from "herdr";
+import { appHome, closeOverlay, exec, notify, props, readTextFile, setShared, shared, theme, themes, settings, run, window } from "herdr";
 import * as fs from "fs/promises";
+import { check, result as installResult, startInstall } from "./updates.js";
 
 // The shared contract (see the theme brief). These three groups and their
 // values are fixed; the panels read them and fall back to the same numbers.
@@ -64,6 +69,7 @@ const EXTRA_DEFAULTS = {
     gitBlame: false,
   },
   git: { ...CONTRACT_DEFAULTS.git, confirmMerge: true, conflictNotices: true, openInTab: false },
+  updates: { checkOnOpen: true },
 };
 
 const DEFAULTS = {
@@ -74,6 +80,7 @@ const DEFAULTS = {
   system: CONTRACT_DEFAULTS.system,
   status: EXTRA_DEFAULTS.status,
   git: EXTRA_DEFAULTS.git,
+  updates: EXTRA_DEFAULTS.updates,
 };
 
 // Number fields: bounds and step. `interval`s are seconds, widths/sizes px.
@@ -172,6 +179,14 @@ const SECTIONS = [
       { group: "git", key: "conflictNotices", kind: "toggle", label: "Conflict notices", help: "Notify when a merge stops on conflicts." },
     ],
   },
+  {
+    id: "updates",
+    label: "Updates",
+    note: "Check github.com/abdh01h/herdr-abdh-theme for a newer Agentee and install it here. Your settings and keys are kept.",
+    rows: [
+      { group: "updates", key: "checkOnOpen", kind: "toggle", label: "Check when opened", help: "Look for a newer version each time this panel opens." },
+    ],
+  },
 ];
 
 function clone(value) {
@@ -222,7 +237,20 @@ function sectionId(section) {
   return SECTIONS.some((s) => s.id === section) ? section : SECTIONS[0].id;
 }
 
-const ICONS = { appearance: "palette", tabs: "layers", explorer: "folder", agents: "bot", system: "cpu", status: "monitor", git: "branch" };
+const ICONS = { appearance: "palette", tabs: "layers", explorer: "folder", agents: "bot", system: "cpu", status: "monitor", git: "branch", updates: "download" };
+
+// Where the installer runs, from the window when there is one (check runs
+// render outside a window), else from the app folder's shape.
+function platform() {
+  let chosen = null;
+  try {
+    chosen = window()?.platform ?? null;
+  } catch {
+    chosen = null;
+  }
+  if (chosen) return chosen;
+  return /^[A-Za-z]:[\\/]/.test(appHome()) ? "windows" : "linux";
+}
 
 export default class AbdhSettings extends View {
   init(_props, cx) {
@@ -240,6 +268,19 @@ export default class AbdhSettings extends View {
     this.themeQuery = "";
     this.themeInput = InputState.new({ placeholder: "Filter themes" });
     this.themeInput.on("change", (_e, cx) => { this.themeQuery = this.themeInput.value(); this.themePage = 0; cx.notify(); });
+
+    // Updates: the last check is shared so reopening the panel shows it at
+    // once, while a check newer than a minute is not repeated.
+    this.update = shared("abdh.updates") ?? null;
+    this.checking = false;
+    this.updateError = "";
+    this.installing = false;
+    this.installError = "";
+    this.installed = Boolean(this.update?.installed);
+    this.installDir = `${appHome()}/abdh-update`;
+    this.polling = false;
+    this.startedAt = 0;
+    cx.timer.every(1500, (timerCx) => this.poll(timerCx));
 
     for (const section of SECTIONS) {
       for (const row of section.rows) {
@@ -269,6 +310,91 @@ export default class AbdhSettings extends View {
       cx.notify();
       // The other panels may read the JSON at their init: make it exist once.
       if (absent && !this.loadError) this.save(cx);
+      if (this.value.updates?.checkOnOpen !== false) this.checkNow(cx);
+    });
+  }
+
+  // Every file of the bundle on main against the installed copy: the check is
+  // a content diff, so it also reports hand edits to installed files. Awaitable
+  // so the install path can finish the re-check before reloading the layout.
+  async runCheck(cx) {
+    try {
+      const found = await check({ exec, fs, root: appHome(), dir: `${this.installDir}/check` });
+      this.update = found;
+      this.updateError = "";
+      if (found.changed.length) this.installed = false;
+      setShared("abdh.updates", found);
+    } catch (error) {
+      // Keep the last result on screen, but record the attempt so a failing
+      // check is not retried on every open.
+      this.update = { ...(this.update ?? {}), at: Date.now() };
+      setShared("abdh.updates", this.update);
+      this.updateError = message(error);
+    }
+    this.checking = false;
+    cx.notify();
+    return this.update;
+  }
+
+  checkNow(cx) {
+    if (this.checking || this.installing) return;
+    this.checking = true;
+    this.updateError = "";
+    cx.notify();
+    cx.spawn((cx) => this.runCheck(cx));
+  }
+
+  install(cx) {
+    if (this.installing || !this.update?.changed?.length) return;
+    this.installing = true;
+    this.installError = "";
+    this.installed = false;
+    this.startedAt = Date.now();
+    cx.notify();
+    notify({ title: "Agentee", body: "Installing the update. Herdr keeps running.", level: "info" });
+    cx.spawn(async (cx) => {
+      try {
+        await startInstall({ exec, fs, dir: this.installDir, platform: platform() });
+      } catch (error) {
+        this.installing = false;
+        this.installError = `Could not start the installer: ${message(error)}`;
+      }
+      cx.notify();
+    });
+  }
+
+  // The installer is detached: poll its result file, then re-check so the
+  // panel shows the files it just wrote.
+  poll(cx) {
+    if (!this.installing || this.polling) return;
+    if (Date.now() - this.startedAt > 300_000) {
+      this.installing = false;
+      this.installError = `The installer did not finish in five minutes. See ${this.installDir}/install.log.`;
+      cx.notify();
+      return;
+    }
+    this.polling = true;
+    cx.spawn(async (cx) => {
+      let outcome = "";
+      try {
+        outcome = await installResult(fs, this.installDir);
+      } finally {
+        this.polling = false;
+      }
+      if (!outcome) return;
+      this.installing = false;
+      if (outcome !== "ok") {
+        this.installError = `${outcome} (${this.installDir}/install.log)`;
+        cx.notify();
+        return;
+      }
+      // The installer replaces this mod's own files, so Herdr reloads it and
+      // this instance usually goes away before the next frame: the toast and
+      // the flag are best effort, and the reloaded panel re-checks on open.
+      this.installed = true;
+      setShared("abdh.updates", { ...(this.update ?? {}), at: Date.now(), changed: [] });
+      notify({ title: "Agentee updated", body: "The theme files were replaced and Herdr reloaded the layout.", level: "success" });
+      cx.notify();
     });
   }
 
@@ -570,6 +696,56 @@ export default class AbdhSettings extends View {
           .on_click((_e, cx) => { if (page * pageSize + list.length < all.length) { this.themePage = page + 1; cx.notify(); } }).child("Next"))));
   }
 
+  pill(t, id, label, on, onClick) {
+    return div()
+      .id(id)
+      .h(26)
+      .px(11)
+      .flex()
+      .items_center()
+      .rounded(6)
+      .border(1)
+      .border_color(t.border)
+      .bg(on ? t.raised : t.canvas)
+      .text_size(12)
+      .text_color(on ? t.foreground : t.dim)
+      .when(on, (el) => el.cursor_pointer().hover((x) => x.bg(t.hover)))
+      .on_click((_e, cx) => { if (on) onClick(cx); })
+      .child(label);
+  }
+
+  updatesCard(t, section) {
+    const behind = this.update?.changed?.length ?? 0;
+    let line = "Not checked yet.";
+    let color = t.dim;
+    if (this.checking) {
+      line = "Checking for updates\u2026";
+    } else if (this.installing) {
+      line = "Installing the update\u2026";
+      color = t.accent;
+    } else if (this.updateError) {
+      line = this.updateError;
+      color = t.blocked;
+    } else if (this.installError) {
+      line = this.installError;
+      color = t.blocked;
+    } else if (behind > 0) {
+      line = "Update available";
+      color = t.accent;
+    } else if (this.update?.at) {
+      line = this.installed ? "Updated" : "Up to date";
+      color = t.done;
+    }
+    const busy = this.checking || this.installing;
+    return v_flex().w_full()
+      .child(h_flex().py(14).gap(10).items_center().border_b(1).border_color(t.border)
+        .child(div().flex_1().min_w(0).text_size(13.5).text_color(color).child(line))
+        .child(this.pill(t, "abdh-update-check", this.checking ? "Checking\u2026" : "Check now", !busy, (cx) => this.checkNow(cx)))
+        .when(behind > 0 && !this.installing, (el) => el.child(this.pill(t, "abdh-update-install", "Install update", true, (cx) => this.install(cx))))
+        .when(this.installing, (el) => el.child(this.pill(t, "abdh-update-installing", "Installing\u2026", false, () => {}))))
+      .child(this.card(t, section));
+  }
+
   body(t) {
     const section = SECTIONS.find((s) => s.id === this.section) ?? SECTIONS[0];
     return div()
@@ -581,7 +757,7 @@ export default class AbdhSettings extends View {
         .child(v_flex().px(28).py(22)
           .child(div().pt(6).pb(8).text_size(12).font_semibold().text_color(t.dim).child(section.label.toUpperCase()))
           .when(Boolean(section.note), (el) => el.child(div().pb(10).text_size(12.5).text_color(t.dim).child(section.note)))
-          .child(section.id === "themes" ? this.themeList(t) : this.card(t, section))));
+          .child(section.id === "themes" ? this.themeList(t) : section.id === "updates" ? this.updatesCard(t, section) : this.card(t, section))));
   }
 
   render(cx) {
