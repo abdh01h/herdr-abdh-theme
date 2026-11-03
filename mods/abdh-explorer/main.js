@@ -12,13 +12,30 @@ const PER_FOLDER = 600, TOTAL = 6000, SEARCH_LIMIT = 1500;
 const DEFAULTS = { explorer: { icons: true, gitColors: true, hiddenFiles: false, expanded: 1 } };
 const settings = () => ({ ...DEFAULTS, ...(shared("abdh.settings") ?? {}) });
 
-function location() {
+function editorFile() {
+  const space = spaces().find((s) => s.active);
+  if (space?.machine) return null;
+  const f = focused();
+  const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
+  if (pane?.mod !== "abdh-editor") return null;
+  const open = shared("abdh.editor");
+  return open?.path ? open : null;
+}
+
+function location(followCwd = null) {
   const shown = props() ?? {};
   const space = spaces().find((s) => s.active), f = focused();
   // A layout can pin the panel to a folder (a preview, a docs tree).
   if (shown.root) return { cwd: shown.root, on: shown.on ?? null, space: space?.id, tab: f?.tab };
   const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
-  // A mod pane (editor, panel tab) has no folder: follow the tab's terminal instead,
+  // An editor pane shows a file; follow that file's project root when it is the
+  // focused pane. The tab's terminal may be somewhere else (often home), and
+  // following it made Files jump away from the file the person was editing.
+  const open = shared("abdh.editor");
+  if (open?.path && pane?.mod === "abdh-editor" && !space?.machine && followCwd) {
+    return { cwd: followCwd, on: null, space: space?.id, tab: f?.tab };
+  }
+  // A mod pane with no file (or no focus): follow the tab's terminal instead,
   // then the space's folder. Otherwise Files follows the editor to the home folder.
   const terminalPane = pane?.terminal ? pane : f?.tab ? panes().find((p) => p.tab === f.tab && p.terminal) : null;
   const on = f?.pane === null ? (f.terminal?.includes("/") ? f.terminal.split("/")[0] : null) : space?.machine ?? null;
@@ -107,6 +124,9 @@ export default class Explorer extends View {
     });
     this.dialog = null;
     this.selected = null;
+    // The focused editor's file and its resolved project root.
+    this.followPath = null;
+    this.followCwd = null;
     this.handle = cx.focus_handle();
     this.dialogInput = InputState.new({ placeholder: "name" });
     this.dialogInput.on("change", () => {});
@@ -184,7 +204,26 @@ export default class Explorer extends View {
 
   // ---- data ---------------------------------------------------------------
   refresh(cx) {
-    const loc = location();
+    const file = editorFile();
+    if (file && this.followPath !== file.path) {
+      // Resolve the open file's project root once per file, so Files shows the
+      // project tree rather than the file's own folder (or the terminal's home).
+      this.followPath = file.path;
+      this.followCwd = null;
+      const dir = dirname(file.path), want = file.path;
+      cx.spawn(async (cx) => {
+        let top = null;
+        if (dir) {
+          const r = await exec("git", ["-C", dir, "rev-parse", "--show-toplevel"]).catch(() => null);
+          if (r && r.code === 0) top = norm(r.stdout.trim());
+        }
+        if (this.followPath !== want) return;
+        this.followCwd = top || dir || null;
+        this.refresh(cx);
+        cx.notify();
+      });
+    }
+    const loc = location(file && this.followPath === file.path ? this.followCwd : null);
     const hidden = settings().explorer.hiddenFiles;
     if (!loc.cwd) { this.root = undefined; this.entries = new Map(); return; }
     if (loc.cwd !== this.root) {

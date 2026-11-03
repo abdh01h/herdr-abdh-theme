@@ -51,7 +51,9 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
   the Git button, plus button, active-tab styling). Panel selection uses
   `layout.show`/`layout.hide`/`layout.select` with `panel-body`.
 - **Files**: `mods/abdh-explorer/main.js` — tree, dialogs, context menu,
-  clipboard, search. Keep search bounded (`git grep` in repos, `rg -j 2
+  clipboard, search. When the editor is focused it roots the panel at the open
+  file's git project (`rev-parse --show-toplevel`, fallback its folder), not the
+  tab terminal's home. Keep search bounded (`git grep` in repos, `rg -j 2
   --max-depth 12` otherwise, content search off at `~`); unbounded scans spike
   the CPU.
 - **Editor**: `mods/abdh-editor/main.js` — save/dirty, external-change flow,
