@@ -6,13 +6,15 @@
 //                 props: { root, action?: "branches" | "create" | "merge", branch?, file?, line? } })
 //
 // Every operation is shown as a confirm step before git runs. Nothing here
-// discards work: no reset, no clean, no stash drop, no merge --abort. When git
+// discards work silently: no reset, no clean, no stash drop, no merge --abort.
+// Deleting a branch asks in a dialog; an unmerged local branch asks a second
+// time before `branch -D`, and a remote delete says it affects everyone. When git
 // refuses because of local changes or a conflict, stderr is shown verbatim and
 // the worktree is left exactly as git left it.
 
-import { View, div } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
-import { exec, props, closeOverlay, notify, theme, shared, focused, spaces, home } from "herdr";
+import { exec, props, closeOverlay, notify, theme, shared, setShared, focused, spaces, home } from "herdr";
 import { READ, REF_FORMAT, parseStatus, parseBranches, parseBlame, parseFileBlame, ago, targetOf } from "./git.js";
 
 const MODES = [
@@ -57,6 +59,9 @@ export default class AbdhGit extends View {
     this.mode = ["create", "merge", "history"].includes(p.action) ? p.action : "branches";
     this.wantedBranch = p.branch ?? null;
     this.selected = null;
+    // Folded branch sections; remote starts folded, and the choice is kept.
+    const folded = shared("abdh.git.folded");
+    this.folded = new Set(Array.isArray(folded) ? folded : ["remote"]);
     this.confirm = null;
     this.notice = "";
     this.busy = false;
@@ -106,6 +111,9 @@ export default class AbdhGit extends View {
 
     this.handle = cx.focus_handle();
     this.handle.focus();
+
+    // A blame-only overlay never shows branch data: no polling for it.
+    if (p.file && !p.line) { this.loadFileBlame(cx); return; }
 
     // One gentle tick re-reads the settings interval, so changing it in
     // abdh-settings takes effect without reloading this overlay. Data is only
@@ -306,7 +314,10 @@ export default class AbdhGit extends View {
     const p = props() ?? {};
     this.fileBlame = { loading: true, rows: [], error: null };
     cx.spawn(async (cx) => {
-      const top = await runGit(this.folder(), ["rev-parse", "--show-toplevel"]);
+      // The file's own folder finds its repo (nested repos, a Files root above it).
+      const file = String(p.file ?? "").replace(/\\/g, "/");
+      const dir = file.lastIndexOf("/") >= 0 ? file.slice(0, file.lastIndexOf("/") + 1) : this.folder();
+      const top = await runGit(dir, ["rev-parse", "--show-toplevel"]);
       if (!top.ok) {
         this.fileBlame = { loading: false, rows: [], error: (top.err || "not a git repository").trim() };
         cx.notify();
@@ -314,7 +325,6 @@ export default class AbdhGit extends View {
       }
       const root = top.out.trim();
       const rootSlash = root.replace(/\\/g, "/").replace(/\/+$/, "");
-      const file = String(p.file ?? "").replace(/\\/g, "/");
       const rel = file.startsWith(rootSlash + "/") ? file.slice(rootSlash.length + 1) : file;
       const r = await runGit(root, ["--no-optional-locks", "blame", "--line-porcelain", "--", rel]);
       if (!r.ok) this.fileBlame = { loading: false, rows: [], error: (r.err || "git blame failed").trim() };
@@ -385,7 +395,8 @@ export default class AbdhGit extends View {
     const st = this.state;
     if (!st.root) return;
     const all = st.branches ?? [];
-    const list = this.mode === "merge" ? all.filter((b) => !(b.kind === "local" && b.name === st.branch)) : all;
+    const list = (this.mode === "merge" ? all.filter((b) => !(b.kind === "local" && b.name === st.branch)) : all)
+      .filter((b) => !this.folded.has(b.kind));
     if (!list.length) return;
     const at = this.selected ? list.findIndex((b) => same(b, this.selected)) : -1;
     const next = at < 0 ? (step > 0 ? 0 : list.length - 1) : (at + step + list.length) % list.length;
@@ -456,7 +467,65 @@ export default class AbdhGit extends View {
     cx.notify();
   }
 
+  // Fetch only updates remote-tracking refs, so it runs without a confirm.
+  fetch(cx) {
+    const root = this.state.root;
+    if (!root || this.busy) return;
+    this.busy = true;
+    this.fetching = true;
+    this.notice = "";
+    cx.notify();
+    cx.spawn(async (cx) => {
+      const r = await runGit(root, ["fetch", "--all", "--prune"]);
+      this.busy = false;
+      this.fetching = false;
+      if (r.ok) notify({ title: "Fetched", body: baseName(root), level: "success", timeout: 2500 });
+      else {
+        this.notice = (r.err || r.out || "git fetch failed.").trim();
+        notify({ title: "Fetch failed", body: firstLine(this.notice), level: "error" });
+      }
+      await this.load();
+      // Spaces and the status bar re-read git now rather than on their timers.
+      setShared("abdh.git.changed", Date.now());
+      cx.notify();
+    });
+  }
+
+  askPull(cx) {
+    const st = this.state;
+    if (!st.root) return;
+    if (st.detached) {
+      this.notice = "Detached HEAD: check out a branch before pulling.";
+      cx.notify();
+      return;
+    }
+    if (!st.upstream) {
+      this.notice = `${st.branch ?? "This branch"} has no upstream to pull from.`;
+      cx.notify();
+      return;
+    }
+    this.notice = "";
+    this.confirm = { kind: "pull", branch: st.branch, upstream: st.upstream };
+    cx.notify();
+  }
+
+  askDelete(cx) {
+    const st = this.state;
+    const sel = this.selected;
+    if (!st.root || !sel) return;
+    if (sel.kind === "local" && sel.name === st.branch) {
+      this.notice = `${sel.name} is checked out; switch to another branch before deleting it.`;
+      cx.notify();
+      return;
+    }
+    this.notice = "";
+    this.confirm = { kind: "delete", branch: sel.name, remote: sel.kind === "remote", force: false };
+    cx.notify();
+  }
+
   describe(c) {
+    if (c.kind === "delete") return `Delete ${c.remote ? "remote" : "local"} branch ${c.branch}?`;
+    if (c.kind === "pull") return `Pull ${c.upstream} into ${c.branch}? (fast-forward only)`;
     if (c.kind === "checkout") return `Check out ${c.branch}${c.track ? " (new tracking branch)" : ""}?`;
     if (c.kind === "create") return `Create ${c.branch} from ${c.source}${c.checkout ? ", then check it out" : ""}?`;
     return `Merge ${c.branch} into ${c.current}?`;
@@ -476,6 +545,12 @@ export default class AbdhGit extends View {
         result = { ok: false, title: "Git failed", message: String(error?.message ?? error) };
       }
       this.busy = false;
+      if (result.unmerged) {
+        // `branch -d` refused: ask again, this time for `branch -D`.
+        this.confirm = { ...c, force: true };
+        cx.notify();
+        return;
+      }
       if (result.ok) {
         this.confirm = null;
         if (c.kind === "create") {
@@ -487,9 +562,12 @@ export default class AbdhGit extends View {
         notify({ title: result.title ?? "Git", body: result.message, level: "success", timeout: 3000 });
       } else {
         this.notice = result.message;
-        notify({ title: result.title ?? "Git error", body: firstLine(result.message), level: "error" });
+        const quiet = result.title === "Merge conflicts" && shared("abdh.settings")?.git?.conflictNotices === false;
+        if (!quiet) notify({ title: result.title ?? "Git error", body: firstLine(result.message), level: "error" });
       }
       await this.load();
+      // Spaces and the status bar re-read git now rather than on their timers.
+      setShared("abdh.git.changed", Date.now());
       cx.notify();
     });
   }
@@ -500,7 +578,55 @@ export default class AbdhGit extends View {
     if (c.kind === "checkout") return this.opCheckout(c);
     if (c.kind === "create") return this.opCreate(c);
     if (c.kind === "merge") return this.opMerge(c);
+    if (c.kind === "delete") return this.opDelete(c);
+    if (c.kind === "pull") return this.opPull(c);
     return { ok: false, title: "Unknown action", message: "Nothing ran." };
+  }
+
+  // --ff-only: a pull never makes a merge commit or stops on conflicts here;
+  // a diverged branch is refused and left as it was.
+  async opPull(c) {
+    const root = this.state.root;
+    const fresh = await this.freshStatus(root);
+    if (fresh && fresh.branch.head !== c.branch) {
+      return { ok: false, title: "Pull stopped", message: `HEAD is now ${fresh.branch.head ?? "detached"}, not ${c.branch}. Nothing was changed.` };
+    }
+    const r = await runGit(root, ["pull", "--ff-only"]);
+    if (!r.ok) {
+      const diverged = fresh && fresh.branch.ahead > 0 && fresh.branch.behind > 0;
+      const why = (r.err || r.out || "git pull --ff-only failed.").trim();
+      return { ok: false, title: "Pull failed", message: diverged ? `${c.branch} and ${c.upstream} have diverged; merge or rebase them first. ${why}` : why };
+    }
+    const fresh2 = await this.freshStatus(root);
+    const pulled = fresh && fresh2 && fresh.branch.oid !== fresh2.branch.oid;
+    return { ok: true, title: "Pulled", message: pulled ? `${c.upstream} into ${c.branch}.` : `${c.branch} is already up to date.` };
+  }
+
+  async opDelete(c) {
+    const root = this.state.root;
+    if (c.remote) {
+      // origin/feature/x: the remote is the longest configured name before a slash.
+      const remotes = await runGit(root, ["remote"]);
+      const names = remotes.ok ? remotes.out.split("\n").map((s) => s.trim()).filter(Boolean) : [];
+      const remote = names.filter((n) => c.branch.startsWith(`${n}/`)).sort((a, b) => b.length - a.length)[0];
+      if (!remote) return { ok: false, title: "Delete failed", message: `No configured remote matches ${c.branch}. Nothing was changed.` };
+      const branch = c.branch.slice(remote.length + 1);
+      const r = await runGit(root, ["push", remote, "--delete", `refs/heads/${branch}`]);
+      if (!r.ok) return { ok: false, title: "Delete failed", message: (r.err || r.out || `git push ${remote} --delete ${branch} failed.`).trim() };
+      return { ok: true, title: "Remote branch deleted", message: `${branch} deleted from ${remote}.` };
+    }
+    const fresh = await this.freshStatus(root);
+    if (fresh && fresh.branch.head === c.branch) {
+      return { ok: false, title: "Delete stopped", message: `${c.branch} is checked out now. Nothing was changed.` };
+    }
+    const r = await runGit(root, ["branch", c.force ? "-D" : "-d", "--", c.branch]);
+    if (!r.ok) {
+      // git's own wording is translated; ask the graph instead.
+      const merged = await runGit(root, ["merge-base", "--is-ancestor", `refs/heads/${c.branch}`, "HEAD"]);
+      if (!c.force && merged.code === 1) return { ok: false, unmerged: true };
+      return { ok: false, title: "Delete failed", message: (r.err || r.out || `git branch -d ${c.branch} failed.`).trim() };
+    }
+    return { ok: true, title: "Branch deleted", message: `${c.branch}${c.force ? " (with its unmerged commits)" : ""}.` };
   }
 
   // Paths a checkout or merge would touch, so local edits in them can refuse
@@ -513,7 +639,7 @@ export default class AbdhGit extends View {
   // A status read taken at the moment of the operation: the refresh timer may
   // be seconds behind, and a stale set would let git overwrite an edit.
   async freshStatus(root) {
-    const r = await runGit(root, [...READ, "status", "--porcelain=v2", "-z", "--no-renames", "--untracked-files=all"]);
+    const r = await runGit(root, [...READ, "status", "--porcelain=v2", "--branch", "-z", "--no-renames", "--untracked-files=all"]);
     return r.ok ? parseStatus(r.out) : null;
   }
 
@@ -537,7 +663,9 @@ export default class AbdhGit extends View {
         message: `Local changes would be overwritten by ${c.branch}: ${few(overlap)}. Nothing was changed; commit or stash them first.`,
       };
     }
-    const r = await runGit(root, c.track ? ["checkout", "--track", c.target] : ["checkout", c.target]);
+    // switch, not checkout: it refuses mid-merge/rebase instead of quietly
+    // abandoning one.
+    const r = await runGit(root, c.track ? ["switch", "--track", c.target] : ["switch", c.target]);
     if (!r.ok) {
       return {
         ok: false,
@@ -562,6 +690,10 @@ export default class AbdhGit extends View {
       };
     }
     const fresh = await this.freshStatus(root);
+    // HEAD may have moved in a terminal while the confirm bar was up.
+    if (fresh && fresh.branch.head !== c.current) {
+      return { ok: false, title: "Merge stopped", message: `HEAD is now ${fresh.branch.head ?? "detached"}, not ${c.current}. Nothing was changed.` };
+    }
     if (fresh && fresh.counts.conflicts > 0) {
       return {
         ok: false,
@@ -613,7 +745,10 @@ export default class AbdhGit extends View {
     if (exists.ok) {
       return { ok: false, title: "Branch exists", message: `Branch ${c.branch} already exists.` };
     }
-    const args = c.checkout ? ["checkout", "-b", c.branch, c.source] : ["branch", c.branch, c.source];
+    // --end-of-options: a source typed as "--force" is a ref name, not a flag.
+    const args = c.checkout
+      ? ["switch", "-c", c.branch, "--end-of-options", c.source]
+      : ["branch", c.branch, "--end-of-options", c.source];
     const r = await runGit(root, args);
     if (!r.ok) {
       return {
@@ -636,8 +771,10 @@ export default class AbdhGit extends View {
     return { local: all.filter((b) => b.kind === "local"), remote: all.filter((b) => b.kind === "remote") };
   }
 
-  button(t, id, label, primary, click) {
+  // danger: a red outline (or a red fill when primary) for deletes.
+  button(t, id, label, primary, click, danger = false) {
     const disabled = this.busy;
+    const fill = danger ? t.blocked : t.solid;
     return h_flex()
       .id(id)
       .h(25)
@@ -647,10 +784,10 @@ export default class AbdhGit extends View {
       .flex_none()
       .rounded(5)
       .border_1()
-      .border_color(primary ? t.solid : t.input)
-      .bg(primary ? t.solid : t.raised)
+      .border_color(primary ? fill : danger ? t.blocked : t.input)
+      .bg(primary ? fill : t.raised)
       .text_size(11.5)
-      .text_color(primary ? t.solid_foreground : disabled ? t.dim : t.foreground)
+      .text_color(primary ? (danger ? "#ffffff" : t.solid_foreground) : danger ? t.blocked : disabled ? t.dim : t.foreground)
       .when(!disabled, (el) => el.cursor_pointer().hover((s) => s.opacity(0.85)).on_click((_e, cx) => click(cx)))
       .child(label);
   }
@@ -661,11 +798,9 @@ export default class AbdhGit extends View {
     const isSelected = same(this.selected, b);
     const disabled = this.mode === "merge" && isCurrent;
     const track = [];
-    if (b.track.ahead !== null || b.track.behind !== null) {
-      if (b.track.ahead) track.push(`\u2191${b.track.ahead}`);
-      if (b.track.behind) track.push(`\u2193${b.track.behind}`);
-      if (b.track.gone) track.push("gone");
-    }
+    if (b.track.ahead) track.push(`\u2191${b.track.ahead}`);
+    if (b.track.behind) track.push(`\u2193${b.track.behind}`);
+    if (b.track.gone) track.push("gone");
     return h_flex()
       .id(`abdh-git-br-${b.kind}-${b.name}`)
       .h(28)
@@ -705,12 +840,26 @@ export default class AbdhGit extends View {
   }
 
   sectionHeader(t, label, count) {
+    const open = !this.folded.has(label);
     return h_flex()
+      .id(`abdh-git-section-${label}`)
       .h(22)
       .flex_none()
-      .px(8)
+      .px(6)
+      .gap(4)
       .items_center()
-      .child(div().text_size(9.5).font_semibold().text_color(t.dim).child(`${label.toUpperCase()} \u00b7 ${count}`));
+      .rounded(4)
+      .cursor_pointer()
+      .text_color(t.dim)
+      .hover((s) => s.bg(t.hover).text_color(t.muted))
+      .on_click((_e, cx) => {
+        if (open) this.folded.add(label);
+        else this.folded.delete(label);
+        setShared("abdh.git.folded", [...this.folded]);
+        cx.notify();
+      })
+      .child(svg(`mods/abdh-explorer/icons/chevron-${open ? "down" : "right"}.svg`).size(11).flex_none())
+      .child(div().text_size(9.5).font_semibold().child(`${label.toUpperCase()} \u00b7 ${count}`));
   }
 
   notRepo(t, st) {
@@ -729,11 +878,11 @@ export default class AbdhGit extends View {
       const { local, remote } = this.groups();
       if (local.length) {
         rows.push(this.sectionHeader(t, "local", local.length));
-        for (const b of local) rows.push(this.branchRow(t, b));
+        if (!this.folded.has("local")) for (const b of local) rows.push(this.branchRow(t, b));
       }
       if (remote.length) {
         rows.push(this.sectionHeader(t, "remote", remote.length));
-        for (const b of remote) rows.push(this.branchRow(t, b));
+        if (!this.folded.has("remote")) for (const b of remote) rows.push(this.branchRow(t, b));
       }
       if (!local.length && !remote.length) {
         rows.push(div().p(10).text_size(11).text_color(t.dim).child("No branches yet."));
@@ -862,9 +1011,12 @@ export default class AbdhGit extends View {
         bits.push(`${st.counts.conflicts} conflict${st.counts.conflicts === 1 ? "" : "s"}`);
         color = t.blocked;
       }
-      if (st.counts.staged) bits.push(`${st.counts.staged} staged`);
-      if (st.counts.unstaged) bits.push(`${st.counts.unstaged} modified`);
-      if (st.counts.untracked) bits.push(`${st.counts.untracked} untracked`);
+      // What is waiting, in words: to commit, to push, to pull.
+      const pending = Math.max(0, (this.dirty?.size ?? 0) - (st.counts.conflicts ?? 0));
+      if (pending) {
+        bits.push(`${pending} to commit`);
+        if (color !== t.blocked) color = t.ansi3;
+      }
       if (!bits.length) {
         bits.push("clean");
         color = t.done;
@@ -874,8 +1026,14 @@ export default class AbdhGit extends View {
     }
     if (st.detached) bits.push("detached");
     else if (st.upstream) {
-      if (st.ahead === 0 && st.behind === 0) bits.push("in sync");
-      else if (st.ahead !== null || st.behind !== null) bits.push(`\u2191${st.ahead ?? 0} \u2193${st.behind ?? 0}`);
+      // No branch.ab line: the upstream ref is gone, so there is nothing to compare.
+      if (st.ahead === null && st.behind === null) bits.push("upstream gone");
+      else if (st.ahead === 0 && st.behind === 0) bits.push("in sync");
+      else {
+        if (st.ahead > 0) bits.push(`\u2191${st.ahead} to push`);
+        if (st.behind > 0) bits.push(`\u2193${st.behind} to pull`);
+        if (color === t.done) color = t.ansi3;
+      }
     } else if (st.root) bits.push("no upstream");
     return { text: bits.join(" \u00b7 "), color };
   }
@@ -913,6 +1071,21 @@ export default class AbdhGit extends View {
       .bg(t.raised)
       .child(div().text_size(10.5).text_color(t.foreground).child(branchLabel));
 
+    const headerButton = (id, label, tip, click) =>
+      div()
+        .id(id)
+        .h(21)
+        .px(7)
+        .flex_none()
+        .flex()
+        .items_center()
+        .rounded(4)
+        .text_size(10.5)
+        .text_color(this.busy ? t.dim : t.muted)
+        .tooltip(tip)
+        .when(!this.busy, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => click(cx)))
+        .child(label);
+
     const header = h_flex()
       .h(40)
       .flex_none()
@@ -933,6 +1106,10 @@ export default class AbdhGit extends View {
           .child(st.root ? baseName(st.root) : st.folder ? baseName(st.folder) : ""),
       )
       .when(Boolean(st.root), (el) => el.child(branchChip))
+      .when(Boolean(st.root), (el) => el
+        .child(headerButton("abdh-git-fetch", this.fetching ? "Fetching…" : "Fetch", "git fetch --all --prune", (c) => this.fetch(c)))
+        .child(headerButton("abdh-git-pull", st.behind > 0 ? `Pull ↓${st.behind}` : "Pull",
+          st.upstream ? `git pull --ff-only from ${st.upstream}` : "No upstream to pull from", (c) => this.askPull(c))))
       .child(
         div()
           .id("abdh-git-refresh")
@@ -1052,9 +1229,51 @@ export default class AbdhGit extends View {
         this.mode === "branches" && Boolean(this.selected) && !(this.selected.kind === "local" && this.selected.name === st.branch),
         (el) =>
           el
+            .child(this.button(t, "abdh-git-delete", "Delete", false, (c) => this.askDelete(c), true))
             .child(this.button(t, "abdh-git-checkout", "Checkout", true, (c) => this.askCheckout(c)))
             .child(this.button(t, "abdh-git-merge-sel", "Merge", false, (c) => this.askMerge(c))),
       );
+
+    // Deleting asks in a dialog over the list, not in the bottom bar.
+    const del = this.confirm?.kind === "delete" ? this.confirm : null;
+    const deleteDialog = () =>
+      div()
+        .id("abdh-git-delete-scrim")
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg("#000000a0")
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .child(
+          v_flex()
+            .id("abdh-git-delete-dialog")
+            .w(400)
+            .p(16)
+            .gap(10)
+            .rounded(10)
+            .border_1()
+            .border_color(t.border)
+            .bg(t.popover)
+            .child(div().text_size(14).font_semibold().text_color(t.foreground)
+              .child(del.force ? "Delete unmerged branch?" : `Delete ${del.remote ? "remote" : "local"} branch?`))
+            .child(div().px(8).py(6).rounded(6).bg(t.raised).text_size(12).text_color(t.foreground).truncate().child(del.branch))
+            .child(div().text_size(11.5).text_color(del.force || del.remote ? t.blocked : t.muted).child(
+              del.remote
+                ? "This runs git push --delete: the branch is removed from the server for everyone. Local branches are kept."
+                : del.force
+                  ? "It has commits that are not merged into HEAD or its upstream. Deleting it drops them (git reflog can still find them for a while)."
+                  : "Removes the branch here. Its commits are merged, so nothing is lost; the remote branch, if any, is kept.",
+            ))
+            .child(h_flex().pt(4).gap(8).justify_end()
+              .child(this.button(t, "abdh-git-delete-cancel", "Cancel", false, (c) => {
+                this.confirm = null;
+                this.notice = "";
+                c.notify();
+              }))
+              .child(this.button(t, "abdh-git-delete-confirm", this.busy ? "Deleting…" : del.force ? "Delete anyway" : "Delete", true, (c) => this.execute(c), true))),
+        );
 
     const footer = h_flex()
       .h(22)
@@ -1076,17 +1295,27 @@ export default class AbdhGit extends View {
       .on_key_down((e, cx) => this.onKey(e, cx))
       .size_full()
       .min_h(0)
+      .relative()
       .bg(t.popover)
       .text_size(12)
       .child(header)
       .child(tabs)
       .child(body)
-      .when(Boolean(this.confirm), (el) => el.child(confirmBar()))
-      .when(!this.confirm, (el) => el.child(actionBar))
-      .child(footer);
+      .when(Boolean(this.confirm) && !del, (el) => el.child(confirmBar()))
+      .when(!this.confirm || Boolean(del), (el) => el.child(actionBar))
+      .child(footer)
+      .when(Boolean(del), (el) => el.child(deleteDialog()));
   }
 
   onKey(e, cx) {
+    // Esc backs out of a pending confirm first, then closes the overlay.
+    if (e.key === "escape" && this.confirm && !this.busy) {
+      this.confirm = null;
+      this.notice = "";
+      cx.stop_propagation();
+      cx.notify();
+      return;
+    }
     if (e.key === "escape") {
       this.dismiss();
       cx.stop_propagation();

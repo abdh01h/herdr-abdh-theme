@@ -30,7 +30,9 @@ const where = (s, ps) => JSON.stringify([s.machine ?? null, place(s, ps)]);
 const base = (path) => path.replace(/\/+$/, "").split("/").pop();
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
-const FALLBACK = 60000;
+// Edits don't touch .git, so the watch never sees them: re-read every 15 s
+// (and at once on shared("abdh.git.changed"): an editor save, a git action).
+const FALLBACK = 15000;
 
 // What a stored color name looks like on an avatar (the same in every mod
 // that draws space avatars): one strong color per hue, light and dark alike.
@@ -77,6 +79,11 @@ export default class Spaces extends View {
     const sp = spaces();
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
     const due = this.due(now, sp, panes());
+    const changed = shared("abdh.git.changed") ?? null;
+    if (changed !== this.changed) {
+      if (this.changed !== undefined) for (const k of Object.keys(this.git)) if (this.git[k]) due.add(k);
+      this.changed = changed;
+    }
     if (due.size) this.refreshGit(due, cx);
     if (sp.some((s) => !this.shown.has(s.id)) || this.orderingDue(now)) cx.notify();
   }
@@ -213,9 +220,11 @@ export default class Spaces extends View {
       const common = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, on });
       const repo = common.stdout.trim();
       const name = repo.endsWith("/.git") ? base(repo.slice(0, -5)) : base(repo).replace(/\.git$/, "");
-      const info = { name, branch: null, ahead: 0, behind: 0, repo: JSON.stringify([on, repo]), linked: repo !== `${top.stdout.trim()}/.git` };
+      const info = { name, branch: null, ahead: 0, behind: 0, changes: 0, repo: JSON.stringify([on, repo]), linked: repo !== `${top.stdout.trim()}/.git` };
       for (const line of r.stdout.split("\n")) {
-        if (line.startsWith("# branch.head ")) info.branch = line.slice(14);
+        // One entry line per changed path: ordinary, renamed, unmerged, untracked.
+        if (/^[12u?] /.test(line)) info.changes++;
+        else if (line.startsWith("# branch.head ")) info.branch = line.slice(14);
         else if (line.startsWith("# branch.ab ")) {
           const [a, b] = line.slice(12).split(" ");
           info.ahead = Math.abs(parseInt(a, 10)) || 0;
@@ -348,15 +357,16 @@ export default class Spaces extends View {
     });
   }
 
-  // Only what's unusual, after the name: "herdr \u00b7 spike \u21912 \u21931". The repo or
-  // branch goes when the name already says it (a worktree is named after its branch),
-  // and master/main go: nearly every space is on one.
+  // After the name: the branch, then what is waiting: "master  \u00b13 \u21912 \u21931"
+  // (changes to commit, commits to push, commits to pull). The repo or branch goes
+  // when the name already says it (a worktree is named after its branch).
   gitTail(g, tree, name, t) {
     const raw = g.branch ?? "detached";
     const same = (a) => a.toLowerCase() === name.toLowerCase();
-    const branch = same(raw) || raw === "master" || raw === "main" ? "" : raw;
+    const branch = same(raw) ? "" : raw;
     const repo = tree || same(g.name) ? "" : g.name;
     const where = [repo, branch].filter(Boolean).join(" \u00b7 ");
+    const chip = (id, text, color, tip) => div().id(id).flex_none().text_color(color).tooltip(tip).child(text);
     return h_flex()
       .flex_1()
       .min_w(0)
@@ -365,9 +375,12 @@ export default class Spaces extends View {
       .items_center()
       .text_size(10.5)
       .text_color(t.dim)
-      .when(Boolean(where), (el) => el.child(div().min_w(0).truncate().child(where)))
-      .when(g.ahead > 0, (el) => el.child(div().flex_none().text_color(t.ansi2).child(`\u2191${g.ahead}`)))
-      .when(g.behind > 0, (el) => el.child(div().flex_none().text_color(t.ansi1).child(`\u2193${g.behind}`)));
+      .when(Boolean(where), (el) => el.child(h_flex().min_w(0).gap(3).items_center()
+        .when(Boolean(branch), (x) => x.child(svg("mods/workspace-chrome/branch.svg").size(10).flex_none()))
+        .child(div().min_w(0).truncate().child(where))))
+      .when(g.changes > 0, (el) => el.child(chip(`sp-ch-${g.repo}-${raw}`, `\u00b1${g.changes}`, t.ansi3, `${g.changes} uncommitted change${g.changes === 1 ? "" : "s"}`)))
+      .when(g.ahead > 0, (el) => el.child(chip(`sp-up-${g.repo}-${raw}`, `\u2191${g.ahead}`, t.ansi2, `${g.ahead} commit${g.ahead === 1 ? "" : "s"} to push`)))
+      .when(g.behind > 0, (el) => el.child(chip(`sp-dn-${g.repo}-${raw}`, `\u2193${g.behind}`, t.ansi1, `${g.behind} commit${g.behind === 1 ? "" : "s"} to pull`)));
   }
 
   row({ w, i, g, tree }, t) {

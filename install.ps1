@@ -1,4 +1,4 @@
-# abdh - one-command install for Windows.
+# Agentee - one-command install for Windows.
 #
 #   irm https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.ps1 | iex
 #
@@ -50,7 +50,7 @@ function To-Hashtable($value) {
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("abdh-install-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
-  Write-Host "==> abdh: downloading $Repo@$Branch"
+  Write-Host "==> Agentee: downloading $Repo@$Branch"
   $zip = Join-Path $tmp "theme.zip"
   Invoke-WebRequest -UseBasicParsing "https://codeload.github.com/$Repo/zip/refs/heads/$Branch" -OutFile $zip
   Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force
@@ -62,8 +62,8 @@ try {
     if (-not (Test-Path -LiteralPath $full)) { New-Item -ItemType Directory -Path $full | Out-Null }
   }
 
-  Write-Host "==> abdh: installing into $homeDir"
-  foreach ($file in @("themes\abdh.json", "layouts\abdh.json", "layouts\abdh.svg")) {
+  Write-Host "==> Agentee: installing into $homeDir"
+  foreach ($file in @("themes\agentee.json", "layouts\agentee.json", "layouts\agentee.svg")) {
     $src = Join-Path $root.FullName $file
     $dst = Join-Path $homeDir $file
     Backup $dst
@@ -115,28 +115,28 @@ try {
       $proc = Start-Process -FilePath $exe -ArgumentList $args -Wait -PassThru -WindowStyle Hidden
       return $proc.ExitCode
     }
-    Write-Host "==> abdh: checking mods"
+    Write-Host "==> Agentee: checking mods"
     $failed = 0
     foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $homeDir "mods") -Directory -Filter "abdh-*" | Where-Object { $_.Name -notmatch '\.bak-' }) {
       if ((Invoke-Herdr @("check", $mod.FullName)) -ne 0) { $failed += 1; Write-Warning "check failed: $($mod.Name)" }
     }
-    if ($failed -eq 0) { Write-Host "    all abdh mods pass" }
+    if ($failed -eq 0) { Write-Host "    all Agentee mods pass" }
 
     if (-not $NoLayout) {
-      if ((Invoke-Herdr @("do", "layout.switch", "--name", "abdh")) -eq 0) { Write-Host "==> abdh: layout switched" }
-      else { Write-Host "==> abdh: open Herdr and run: herdr-app do layout.switch --name abdh" }
+      if ((Invoke-Herdr @("do", "layout.switch", "--name", "agentee")) -eq 0) { Write-Host "==> Agentee: layout switched" }
+      else { Write-Host "==> Agentee: open Herdr and run: herdr-app do layout.switch --name agentee" }
     }
   } elseif ($exe) {
-    Write-Host "==> abdh: start Herdr once (it installs its shipped mods), then: herdr-app check <each abdh mod>"
+    Write-Host "==> Agentee: start Herdr once (it installs its shipped mods), then: herdr-app check <each Agentee mod>"
   } else {
-    Write-Host "==> abdh: herdr-app not found; open Herdr and run: herdr-app do layout.switch --name abdh"
+    Write-Host "==> Agentee: herdr-app not found; open Herdr and run: herdr-app do layout.switch --name agentee"
   }
 
-  if ($backups.Count -gt 0) { Write-Host ("==> abdh: backups (" + $backups.Count + ") - " + ($backups -join ", ")) }
-  Write-Host "==> abdh: done. Settings: $homeDir\abdh-settings.json (open abdh settings in the sidebar footer)."
+  if ($backups.Count -gt 0) { Write-Host ("==> Agentee: backups (" + $backups.Count + ") - " + ($backups -join ", ")) }
+  Write-Host "==> Agentee: done. Settings: $homeDir\abdh-settings.json (open Theme settings in the sidebar footer)."
 }
 catch {
-  Write-Error "abdh install failed: $($_.Exception.Message)"
+  Write-Error "Agentee install failed: $($_.Exception.Message)"
   exit 1
 }
 finally {

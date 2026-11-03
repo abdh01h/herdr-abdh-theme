@@ -1,17 +1,17 @@
 ---
 name: abdh-herdr-theme
-description: Work on the abdh Herdr layout/theme in this repository — install it into ~/.config/herdr-app, verify it, change its Carbon palette, layout blocks, tabs, editor, or Files/Agents/System panels, and publish updates. Use when the user mentions abdh, the Herdr theme/layout, its editor or panels, or asks to install/update this project.
+description: Work on the Agentee Herdr layout/theme in this repository — install it into ~/.config/herdr-app, verify it, change its Carbon palette, layout blocks, tabs, editor, or Files/Agents/System panels, and publish updates. Use when the user mentions Agentee (formerly abdh), the Herdr theme/layout, its editor or panels, or asks to install/update this project.
 ---
 
-# abdh Herdr theme
+# Agentee Herdr theme
 
 This repo is a Herdr **layout bundle**: one layout + theme + the personal mods it
 references. Herdr runs it from `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides).
 
 ```
-layouts/abdh.json      window tree (left rail, tabs, work area, right panel, status)
-layouts/abdh.svg       layout picker preview
-themes/abdh.json       Carbon palette (background/foreground/selection/cursor/ansi/colors)
+layouts/agentee.json      window tree (left rail, tabs, work area, right panel, status)
+layouts/agentee.svg       layout picker preview
+themes/agentee.json       Carbon palette (background/foreground/selection/cursor/ansi/colors)
 mods/abdh-*            layout, panels, editor, tabs, settings, git, system probes
 keys.snippet.json      keys.json section to merge (editor save/close)
 preview.png, RECIPE.md publishing metadata
@@ -19,8 +19,8 @@ preview.png, RECIPE.md publishing metadata
 
 ## Install or update on this machine
 
-1. Copy `themes/abdh.json` to `~/.config/herdr-app/themes/`.
-2. Copy `layouts/abdh.json` and `layouts/abdh.svg` to `~/.config/herdr-app/layouts/`.
+1. Copy `themes/agentee.json` to `~/.config/herdr-app/themes/`.
+2. Copy `layouts/agentee.json` and `layouts/agentee.svg` to `~/.config/herdr-app/layouts/`.
 3. Copy every `mods/abdh-*` folder to `~/.config/herdr-app/mods/` (replace).
 4. Merge `keys.snippet.json` into `~/.config/herdr-app/keys.json` (do not drop
    existing sections; on conflict ask before replacing a user key).
@@ -28,8 +28,8 @@ preview.png, RECIPE.md publishing metadata
 
 ```sh
 for m in ~/.config/herdr-app/mods/abdh-*; do herdr-app check "$m"; done
-herdr-app do layout.switch --name abdh
-herdr-app status   # expect layout "abdh", errors []
+herdr-app do layout.switch --name agentee
+herdr-app status   # expect layout "agentee", errors []
 ```
 
 Herdr rewrites `~/.config/herdr-app/frame/` at every start. Never fix things
@@ -38,11 +38,11 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
 
 ## Where to change what
 
-- **Palette / density**: `themes/abdh.json` (`background`, `foreground`,
+- **Palette / density**: `themes/agentee.json` (`background`, `foreground`,
   `selection`, 16 `ansi`, `colors` overrides such as `chrome`, `surface`,
   `raised`, `accent`, `border`, `done`, `blocked`). Panel colors that are not
   named there are derived by Herdr, so prefer named overrides.
-- **Layout structure**: `layouts/abdh.json`. Keep ids unique — a collision
+- **Layout structure**: `layouts/agentee.json`. Keep ids unique — a collision
   between the sidebar `agents` block and a panel stack child once moved the
   token panel into the left rail (panel children are `panel-files`,
   `panel-agents`, `panel-system`). Root flags: `theme`, `movable: false`,
@@ -56,14 +56,18 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
   the CPU.
 - **Editor**: `mods/abdh-editor/main.js` — save/dirty, external-change flow,
   file tabs, `lineDiff`, blame hand-off, pane close. `EditorState` has no
-  cursor/selection/decorations, so do not promise inline gutters or a text
-  Copy/Paste menu.
+  cursor/selection/decorations, so do not promise inline gutters or a Cut/Copy/Paste
+  menu (a right press clears the selection; `dispatch_action` reaches Herdr's
+  commands, not `input::*`).
 - **Selection color**: the shell paints an unset editor selection with Base
   `accent` at 40 %, and the app maps `accent` from the theme's `hover`.
   `abdh-chrome` republishes Base tokens with `set_theme` from **gpui-base**
   (use `cx.theme().colors`, not `.tokens`). Keep that sync or selection becomes
-  invisible.
-- **Panels**: `abdh-agents/src` (tokens from agent session logs), `abdh-system`
+  invisible. Colours read from `cx.theme().colors` lose their alpha, so the sync
+  takes them from `theme()`; it also clears Base `border` to hide indent guides.
+- **Event handlers**: use the handler's own `cx`, never `render`'s (stale after
+  render returns: clicks change state but never redraw).
+- **Panels**: `abdh-agents` (`main.js` + `tokens.mjs`, tokens from agent session logs), `abdh-system`
   (`probes/windows.js`, `probes/linux.js`, `probes/macos.js`), `abdh-git`,
   `abdh-status`, `abdh-settings` (its own `abdh-settings.json`, paged themes),
   `abdh-menu`.
@@ -85,7 +89,7 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
 
 ```sh
 herdr-app check <mod dir>                     # every changed mod
-herdr-app do layout.switch --name abdh
+herdr-app do layout.switch --name agentee
 herdr-app status                              # layout + errors
 herdr-app shot /tmp/abdh.png                  # visual proof
 ```

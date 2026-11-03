@@ -1,11 +1,11 @@
-// abdh editor: a real file editor in a mod pane.
+// Agentee editor: a real file editor in a mod pane.
 // Chrome-like file tabs, save to disk, dirty state, external-change handling,
 // unsaved-change confirmation, and the shared("abdh.editor") stats the status bar reads.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState, Input, InputState } from "gpui-base";
 import {
   exec, readTextFile, writeTextFile, watchFolder, theme, shared, setShared, props, nextCommand, settings,
-  appHome, notify, window, openOverlay, panes, run, focused,
+  appHome, notify, openOverlay, panes, run, focused, keys, window as appWindow,
 } from "herdr";
 
 const LANG = {
@@ -77,6 +77,10 @@ export default class EditorPane extends View {
     this.activeId = null;
     this.untitled = 0;
     this.lastOpen = shared("abdh.open")?.nonce ?? null;
+    this.lastPick = shared("abdh.editor.pick")?.nonce ?? null;
+    // This copy's name for its right-click menu's actions.
+    this.key = `${Date.now()}-${Math.random()}`;
+    this.lastMenu = shared("abdh.editor.cmd")?.nonce ?? null;
     this.pressed = null;
     this.hovered = null;
     this.pending = null; // { id, kind: "close" | "reload" }
@@ -89,18 +93,25 @@ export default class EditorPane extends View {
     this.handle = cx.focus_handle();
     const p = props() ?? {};
     this.root = p.root ?? null;
+    // The tab this copy was split into: open requests name the tab they are for.
+    this.tab = focused()?.tab ?? null;
     // Shared open requests arrive while another mod is rendering. A spawn made
     // from render never runs, so poll from a timer instead.
     cx.timer.every(150, (cx) => this.consume(cx));
-    if (p.path) cx.spawn(async (cx) => { await this.open(p.path, cx); });
+    if (p.path) cx.spawn(async (cx) => { await this.open(p.path, cx, p.on ?? null); });
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
         if (command === "save") await this.save(cx);
         else if (command === "close") { if (this.active()) this.requestClose(cx); else this.closePane(); }
         else if (command === "saveas") this.startSaveAs(cx);
-        else if (command === "focus") this.handle.focus();
+        // Herdr sends "focus" when a popup over this pane closes, too. The text
+        // area can't be focused from here (EditorState has no focus()), so with a
+        // file showing, leave the keyboard where it is rather than take it away.
+        else if (command === "focus") { if (this.diff || !this.active()?.editor) this.handle.focus(); }
         else if (command === "diff") this.toggleDiff(cx);
+        else if (command === "next") this.step(1, cx);
+        else if (command === "prev") this.step(-1, cx);
         cx.notify();
       }
     });
@@ -129,7 +140,7 @@ export default class EditorPane extends View {
       const dir = `${appHome()}/abdh-recovery`;
       await fs.mkdir(dir, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      for (const f of dirty) await fs.writeFile(`${dir}/${f.name}.${stamp}.txt`, f.text, "utf8");
+      for (const [i, f] of dirty.entries()) await fs.writeFile(`${dir}/${f.name}.${stamp}.${i}.txt`, f.text, "utf8");
       notify({ title: "Unsaved edits recovered", body: `${dirty.length} file(s) in abdh-recovery`, level: "warning", timeout: 8000 });
     } catch { /* the window is closing; nothing else to do */ }
   }
@@ -172,7 +183,6 @@ export default class EditorPane extends View {
   }
 
   fill(file, text, cx) {
-    const t = theme();
     const ext = extOf(file.path ?? file.name);
     file.text = text;
     file.saved = text;
@@ -182,13 +192,26 @@ export default class EditorPane extends View {
     file.language = LANG[ext] ?? ext ?? "txt";
     file.label = LABEL[ext] ?? (ext ? ext.toUpperCase() : "Text");
     file.readonly = Boolean(file.on);
+    this.makeEditor(file, text);
+    if (file.id === this.activeId) this.publish();
+  }
+
+  // Theme settings → Wrap long lines; on unless turned off.
+  wrap() { return shared("abdh.settings")?.appearance?.softWrap ?? true; }
+
+  // A new EditorState holding `text`: a file's first load, or a setting the
+  // state only takes when it is made (wrapping). `gen` gives the element a new
+  // id, or GPUI would keep painting the old native view.
+  makeEditor(file, text) {
+    const t = theme();
+    file.gen = (file.gen ?? 0) + 1;
     file.editor = EditorState.new({
       readonly: Boolean(file.on),
       language: file.language,
       value: text,
       line_numbers: true,
       folding: true,
-      soft_wrap: false,
+      soft_wrap: this.wrap(),
       font_family: settings().font_family,
       font_size: shared("abdh.settings")?.appearance?.monoSize ?? 13,
       syntax: {
@@ -197,13 +220,21 @@ export default class EditorPane extends View {
         operator: t.muted, punctuation: t.muted, boolean: t.ansi3,
       },
     });
-    file.editor.on("change", () => {
+    // The change event brings its own cx: the one fill() was called with may be
+    // a click's, which is gone by the first keystroke.
+    file.editor.on("change", (_e, cx) => {
       file.text = file.editor.value();
       file.dirty = file.text !== file.saved;
       this.publish();
       cx.notify();
     });
-    if (file.id === this.activeId) this.publish();
+  }
+
+  // Ctrl+PageDown / Ctrl+PageUp: the next or previous open file, wrapping round.
+  step(by, cx) {
+    if (this.files.length < 2) return;
+    const at = this.files.findIndex((f) => f.id === this.activeId);
+    this.activate(this.files[(at + by + this.files.length) % this.files.length].id, cx);
   }
 
   watch(dir, cx) {
@@ -212,9 +243,12 @@ export default class EditorPane extends View {
     cx.spawn(async (cx) => {
       try {
         for (;;) {
-          await watchFolder(dir);
+          const changed = await watchFolder(dir);
+          // Stop once no open file lives here; re-read only files that changed.
+          if (!this.files.some((f) => f.path && samePath(dirname(f.path), dir))) { this.watchers.delete(dir); return; }
           for (const f of this.files) {
             if (!f.path || !samePath(dirname(f.path), dir)) continue;
+            if (!changed.some((p) => samePath(p, f.path) || samePath(p, dir))) continue;
             await this.checkExternal(f, cx);
           }
           cx.notify();
@@ -229,7 +263,7 @@ export default class EditorPane extends View {
     if (file.on) return;
     try {
       const disk = await readTextFile(file.path);
-      if (disk === null) { file.external = ""; return; }
+      if (disk === null) { if (!file.error) file.error = `${file.name} was deleted on disk`; return; }
       if (disk === file.saved) return;
       if (!file.dirty) {
         this.fill(file, disk, cx);
@@ -240,18 +274,21 @@ export default class EditorPane extends View {
     } catch { /* ignore a transient read */ }
   }
 
-  async save(cx) {
-    const f = this.active();
+  // `f`: the close bar saves the file it asked about, which may not be active.
+  async save(cx, f = this.active()) {
     if (!f) return false;
     if (f.on) { f.error = "This file is on another machine and is read-only here"; cx.notify(); return false; }
     if (!f.path) { this.startSaveAs(cx); return false; }
+    // Typing goes on during the await; only what was written counts as saved.
+    const text = f.text;
     try {
-      await writeTextFile(f.path, f.text, f.saved);
-      f.saved = f.text;
-      f.dirty = false;
+      await writeTextFile(f.path, text, f.saved);
+      f.saved = text;
+      f.dirty = f.text !== text;
       f.external = null;
       f.error = null;
       this.notice = `Saved ${f.name}`;
+      setShared("abdh.git.changed", Date.now());
       this.publish();
       cx.notify();
       return true;
@@ -265,16 +302,20 @@ export default class EditorPane extends View {
 
   async overwrite(cx) {
     const f = this.active();
-    if (!f?.path) return;
+    // No editor means the file never loaded (too large, binary): f.text is not
+    // its content, and writing it would empty the file.
+    if (!f?.path || !f.editor || f.on) return;
+    const text = f.text;
     try {
       const disk = await readTextFile(f.path);
-      await writeTextFile(f.path, f.text, disk);
-      f.saved = f.text;
-      f.dirty = false;
+      await writeTextFile(f.path, text, disk);
+      f.saved = text;
+      f.dirty = f.text !== text;
       f.external = null;
       f.error = null;
       this.pending = null;
       this.notice = `Saved ${f.name}`;
+      setShared("abdh.git.changed", Date.now());
       this.publish();
     } catch (e) { f.error = String(e.message ?? e); }
     cx.notify();
@@ -369,17 +410,16 @@ export default class EditorPane extends View {
     const f = this.active();
     if (!f) { this.diffData = { error: "No file open" }; return; }
     if (!f.path) { this.diffData = { error: "An untitled buffer has no HEAD version" }; return; }
-    const text = f.text, file = f.path, root = this.root ?? dirname(f.path);
+    // The file's own folder finds its repo; the Files root may be above it.
+    const text = f.text, file = f.path, root = dirname(f.path);
     this.diffData = { loading: true };
     cx.spawn(async (cx) => {
       try {
         const top = await exec("git", ["-C", root, "rev-parse", "--show-toplevel"]);
         if (top.code !== 0) { this.diffData = { error: "Not a git repository" }; cx.notify(); return; }
-        const repo = String(top.stdout).trim();
-        const repoSlash = repo.replace(/\\/g, "/").replace(/\/+$/, "");
-        const normFile = String(file).replace(/\\/g, "/");
-        const rel = normFile.startsWith(repoSlash + "/") ? normFile.slice(repoSlash.length + 1) : normFile;
-        const head = await exec("git", ["-C", repo, "show", `HEAD:${rel}`]);
+        // `./name` is resolved from -C, so no repo-relative path (and no
+        // drive-letter case) has to be worked out here.
+        const head = await exec("git", ["-C", root, "show", `HEAD:./${base(file)}`]);
         const before = head.code === 0 ? String(head.stdout).replace(/\r\n/g, "\n") : "";
         const after = String(text).replace(/\r\n/g, "\n");
         const d = lineDiff(before ? before.split("\n") : [], after.split("\n"));
@@ -421,9 +461,88 @@ export default class EditorPane extends View {
     const open = shared("abdh.open");
     if (open && open.nonce !== this.lastOpen) {
       this.lastOpen = open.nonce;
+      if (open.tab && this.tab && open.tab !== this.tab) return;
       if (open.root) this.root = open.root;
       cx.spawn(async (cx) => { await this.open(open.path, cx, open.on ?? null); });
     }
+    // A file picked in the open-files menu (ids are this copy's own).
+    const pick = shared("abdh.editor.pick");
+    if (pick && pick.nonce !== this.lastPick) {
+      this.lastPick = pick.nonce;
+      if (this.files.some((f) => f.id === pick.id)) this.activate(pick.id, cx);
+    }
+    const menu = shared("abdh.editor.cmd");
+    if (menu && menu.nonce !== this.lastMenu) {
+      this.lastMenu = menu.nonce;
+      if (menu.key === this.key) this.menuAction(menu.action, cx);
+    }
+    // Wrapping changed in Theme settings: rebuild each editor with its current
+    // text (unsaved edits stay; undo history starts over).
+    const wrap = this.wrap();
+    if (this.wrapped === undefined) this.wrapped = wrap;
+    else if (wrap !== this.wrapped) {
+      this.wrapped = wrap;
+      for (const file of this.files) if (file.editor) this.makeEditor(file, file.text);
+      cx.notify();
+    }
+  }
+
+  menuAction(action, cx) {
+    const f = this.active();
+    if (action === "save") cx.spawn(async (cx) => { await this.save(cx); });
+    else if (action === "saveas") this.startSaveAs(cx);
+    else if (action === "close") this.requestClose(cx);
+    else if (action === "diff") this.toggleDiff(cx);
+    else if (action === "files") this.fileMenu();
+    else if (action === "blame" && f?.path) openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(f.path), file: f.path } });
+    cx.notify();
+  }
+
+  // Right-click: the file's actions, then the pane's (what Herdr's own pane
+  // menu offers a terminal), with the chords keys.json binds to them.
+  paneMenu() {
+    // The chord for this platform: cmd- on macOS, never cmd- elsewhere.
+    const mac = appWindow()?.platform === "macos";
+    const chord = (action, section = "global") => {
+      const all = keys().filter((b) => b.action === action && b.section === section).map((b) => b.keys);
+      return all.find((k) => (mac ? k.includes("cmd-") : !k.includes("cmd-"))) ?? all[0] ?? null;
+    };
+    const mine = (label, action, hint = null) => ({ label, hint, shared: "abdh.editor.cmd", value: { key: this.key, action } });
+    const f = this.active(), pane = this.myPane()?.pane ?? null;
+    const items = [];
+    // No Cut/Copy/Paste here: a right press moves the caret (the selection is
+    // gone before a menu opens), and a mod's window.dispatch_action reaches
+    // Herdr's command table, not the text area's input:: actions. The keys work.
+    if (f) {
+      items.push(mine("Save", "save", chord("abdh-editor.save", "mod:abdh-editor")));
+      items.push(mine("Save as…", "saveas", chord("abdh-editor.saveas", "mod:abdh-editor")));
+      items.push(mine(this.diff ? "Back to the editor" : "Diff with HEAD", "diff"));
+      if (f.path) items.push(mine("Git blame", "blame"));
+      if (this.files.length > 1) items.push(mine("Open files…", "files"));
+      items.push(mine("Close file", "close", chord("abdh-editor.close", "mod:abdh-editor")));
+    }
+    if (pane) {
+      if (items.length) items.push({ separator: true });
+      items.push({ label: "Split right", command: "pane.split", args: { direction: "right", pane }, hint: chord("pane.split:right") });
+      items.push({ label: "Split down", command: "pane.split", args: { direction: "down", pane }, hint: chord("pane.split:down") });
+      items.push({ label: "Zoom", command: "pane.zoom", args: { pane }, hint: chord("pane.zoom") });
+      items.push({ separator: true });
+      items.push({ label: "Close pane", command: "pane.close", args: { pane }, hint: chord("pane.close"), danger: true });
+    }
+    if (!items.length) return;
+    const height = 10 + items.reduce((h, i) => h + (i.separator ? 7 : 28), 0);
+    openOverlay({ mod: "abdh-menu", kind: "popup", width: 250, height, props: { items } });
+  }
+
+  // Every open file in a popup, for when the strip has more than fits.
+  fileMenu() {
+    const items = this.files.map((f) => ({
+      label: `${f.dirty ? "● " : ""}${f.name}`,
+      hint: f.id === this.activeId ? "open" : base(dirname(f.path ?? "")),
+      shared: "abdh.editor.pick",
+      value: { id: f.id },
+    }));
+    openOverlay({ mod: "abdh-menu", kind: "popup", width: 280, height: Math.min(420, 44 + items.length * 28), props: { title: "Open files", items } });
   }
 
   bar(t, text, tone, buttons) {
@@ -439,73 +558,86 @@ export default class EditorPane extends View {
     const f = this.active();
     const close = this.pending?.kind === "close" ? this.files.find((x) => x.id === this.pending.id) : null;
 
+    // Flat tabs as wide as their names (60–200 px; the strip scrolls past that);
+    // the active one is the code's own background with an accent line on top.
     const tab = (file, i) => {
       const on = file.id === this.activeId, hot = this.hovered === file.id;
-      return h_flex().id(`ed-tab-${file.id}`).h(30).max_w(280).min_w(140).px(11).gap(7).flex_none().items_center()
-        .rounded_t(7)
-        .border_t(2)
-        .border_color(on ? t.accent : "#00000000")
+      return v_flex().id(`ed-tab-${file.id}`).h_full().flex_none().min_w(60).max_w(200)
+        .border_r(1).border_color(t.border)
         .bg(on ? t.background : t.chrome)
         .text_size(12).text_color(on ? t.foreground : t.muted).cursor_pointer()
-        .hover((s) => s.bg(on ? t.background : t.surface))
-        .on_hover((hovered) => { this.hovered = hovered ? file.id : null; })
+        .hover((s) => s.bg(on ? t.background : t.surface).text_color(t.foreground))
+        .tooltip(file.path ?? file.name)
+        .on_mouse_down("middle", (_e, ctx) => { ctx.stop_propagation(); this.requestClose(ctx, file.id); })
+        // Handlers use their own ctx: render's cx is stale once render returns.
+        .on_hover((hovered, ctx) => {
+          if (hovered) this.hovered = file.id;
+          else if (this.hovered === file.id) this.hovered = null;
+          ctx.notify();
+        })
         .on_mouse_down("left", () => { this.pressed = i; })
-        .on_mouse_up("left", () => {
+        .on_mouse_up("left", (_e, ctx) => {
           const from = this.pressed;
           this.pressed = null;
           if (from !== null && from !== i) {
             const [moved] = this.files.splice(from, 1);
             this.files.splice(i, 0, moved);
-            cx.notify();
-          } else this.activate(file.id, cx);
+            ctx.notify();
+          } else this.activate(file.id, ctx);
         })
-        .when(file.dirty, (el) => el.child(div().size(6).flex_none().rounded_full().bg(t.ansi3)).tooltip("Unsaved changes"))
-        .child(div().flex_1().min_w(0).truncate().child(file.name))
-        .when(on || hot, (el) => el.child(div().id(`ed-x-${file.id}`).size(14).flex_none().flex().items_center().justify_center().rounded(3)
-          .text_color(t.dim).hover((s) => s.bg(t.raised).text_color(t.foreground))
-          .on_mouse_down("left", (_e, ctx) => ctx.stop_propagation())
-          .on_click((_e, ctx) => { ctx.stop_propagation(); this.requestClose(ctx, file.id); })
-          .child(svg("mods/abdh-tabs/icons/close.svg").size(10))));
+        .child(div().h(2).flex_none().bg(on ? t.accent : "#00000000"))
+        .child(h_flex().flex_1().min_h(0).pl(12).pr(5).gap(6).items_center()
+          .when(file.dirty, (el) => el.child(div().size(6).flex_none().rounded_full().bg(t.ansi3)))
+          .child(div().min_w(0).flex_shrink(1).truncate().child(file.name))
+          // The close button keeps its place, so tabs don't jump on hover.
+          .child(div().id(`ed-x-${file.id}`).size(16).flex_none().flex().items_center().justify_center().rounded(3)
+            .when(on || hot, (el) => el.text_color(t.dim).hover((s) => s.bg(t.raised).text_color(t.foreground))
+              .on_mouse_down("left", (_e, ctx) => ctx.stop_propagation())
+              .on_click((_e, ctx) => { ctx.stop_propagation(); this.requestClose(ctx, file.id); })
+              .child(svg("mods/abdh-tabs/icons/close.svg").size(10)))));
     };
+    const tool = (id, label) => div().id(id).h(22).px(8).flex().items_center().rounded(4).text_size(11).text_color(t.dim)
+      .hover((s) => s.bg(t.hover).text_color(t.foreground)).child(label);
 
     return v_flex().id("abdh-editor").size_full().min_h(0).bg(t.background).text_size(12.5).text_color(t.foreground)
+      .track_focus(this.handle)
+      .on_mouse_down("right", (_e, ctx) => { ctx.stop_propagation(); this.paneMenu(); })
       .on_key_down((e, ctx) => {
         if (e.key === "escape") { this.notice = null; this.pending = null; ctx.notify(); }
       })
-      .child(h_flex().h(29).flex_none().px(4).gap(2).items_end().bg(t.chrome).border_b(1).border_color(t.border)
-        .child(h_flex().flex_1().min_w(0).gap(2).items_end().overflow_x_scrollbar()
+      .child(h_flex().h(32).flex_none().bg(t.chrome).border_b(1).border_color(t.border)
+        .child(h_flex().id("ed-strip").flex_1().min_w(0).h_full().overflow_x_scrollbar()
           .children(this.files.map(tab))
-          .child(h_flex().id("ed-new").h(22).px(7).ml(2).flex_none().items_center().justify_center().rounded(4)
-            .text_size(15).text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.accent)).on_click(() => this.newBuffer(cx))
+          .child(h_flex().id("ed-new").h(22).px(7).mx(4).flex_none().items_center().justify_center().self_center().rounded(4)
+            .text_size(15).text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.accent)).on_click((_e, ctx) => this.newBuffer(ctx))
             .tooltip("New untitled file").child("+")))
-        .child(h_flex().gap(2).items_center()
-          .child(div().id("ed-diff").h(22).px(8).flex().items_center().rounded(4).text_size(11)
-            .text_color(this.diff ? t.accent : t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
-            .on_click((_e, ctx) => this.toggleDiff(ctx)).child(this.diff ? "Edit" : "Diff"))
-          .child(div().id("ed-blame").h(22).px(8).flex().items_center().rounded(4).text_size(11).text_color(t.dim)
-            .hover((s) => s.bg(t.hover).text_color(t.foreground))
+        .child(h_flex().h_full().flex_none().pl(4).pr(4).gap(1).items_center().border_l(1).border_color(t.border)
+          .when(this.files.length > 1, (el) => el.child(tool("ed-files", `${this.files.length} ⌄`)
+            .tooltip("Open files  (Ctrl+PageUp / Ctrl+PageDown)").on_click(() => this.fileMenu())))
+          .child(tool("ed-diff", this.diff ? "Edit" : "Diff").when(this.diff, (el) => el.text_color(t.accent))
+            .on_click((_e, ctx) => this.toggleDiff(ctx)))
+          .child(tool("ed-blame", "Blame")
             .on_click(() => {
               const file = this.active();
-              if (file?.path) openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: this.root, file: file.path } });
-            }).child("Blame"))
-          .child(div().id("ed-save").h(22).px(8).flex().items_center().rounded(4).text_size(11).text_color(t.dim)
-            .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, ctx) => this.save(ctx)).child("Save"))
+              if (file?.path) openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(file.path), file: file.path } });
+            }))
+          .child(tool("ed-save", "Save").on_click((_e, ctx) => ctx.spawn(async (cx) => { await this.save(cx); })))
           .child(div().id("ed-close-pane").size(22).flex_none().flex().items_center().justify_center().rounded(4)
             .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
             .tooltip("Close the editor pane").on_click(() => this.closePane())
             .child(svg("mods/abdh-tabs/icons/close.svg").size(11)))))
       .when(Boolean(this.notice), (el) => el.child(this.bar(t, this.notice, t.ansi2, [["Dismiss", "dim", (_e, ctx) => { this.notice = null; ctx.notify(); }]])))
       .when(Boolean(f?.error), (el) => el.child(this.bar(t, f.error, t.blocked, [
-        ["Overwrite", "primary", (_e, ctx) => this.overwrite(ctx)],
-        ["Reload", "dim", (_e, ctx) => this.reloadFromDisk(ctx)],
+        ["Overwrite", "primary", (_e, ctx) => ctx.spawn(async (cx) => { await this.overwrite(cx); })],
+        ["Reload", "dim", (_e, ctx) => ctx.spawn(async (cx) => { await this.reloadFromDisk(cx); })],
         ["Dismiss", "dim", (_e, ctx) => { f.error = null; this.pending = null; ctx.notify(); }],
       ])))
       .when(Boolean(f?.external) && !f?.error, (el) => el.child(this.bar(t, `${f.name} changed on disk`, t.ansi3, [
-        ["Overwrite", "primary", (_e, ctx) => this.overwrite(ctx)],
-        ["Reload", "dim", (_e, ctx) => this.reloadFromDisk(ctx)],
+        ["Overwrite", "primary", (_e, ctx) => ctx.spawn(async (cx) => { await this.overwrite(cx); })],
+        ["Reload", "dim", (_e, ctx) => ctx.spawn(async (cx) => { await this.reloadFromDisk(cx); })],
       ])))
       .when(Boolean(close), (el) => el.child(this.bar(t, `Save changes to ${close.name}?`, t.ansi3, [
-        ["Save", "primary", (_e, ctx) => { this.pending = null; ctx.spawn(async (ctx) => { if (await this.save(ctx)) this.closeFile(close.id, ctx); }); }],
+        ["Save", "primary", (_e, ctx) => { this.pending = null; ctx.spawn(async (ctx) => { if (await this.save(ctx, close)) this.closeFile(close.id, ctx); }); }],
         ["Discard", "dim", (_e, ctx) => this.closeFile(close.id, ctx)],
         ["Cancel", "dim", (_e, ctx) => { this.pending = null; ctx.notify(); }],
       ])))
@@ -513,10 +645,10 @@ export default class EditorPane extends View {
         .child(div().text_size(11.5).text_color(t.muted).child("Save as"))
         .child(Input.new(this.saveAsInput).flex_1())
         .child(div().id("ed-saveas-ok").h(22).px(8).flex().items_center().rounded(4).bg(t.solid).text_color(t.solid_foreground)
-          .on_click((_e, ctx) => this.commitSaveAs(ctx)).child("Create"))))
+          .on_click((_e, ctx) => ctx.spawn(async (cx) => { await this.commitSaveAs(cx); })).child("Create"))))
       .when(this.diff, (el) => el.child(this.diffView(t)))
       .child(v_flex().flex_1().min_h(0)
-        .when(!this.diff && Boolean(f?.editor), (el) => el.child(Editor.new(f.editor).id(`ed-code-${f.id}`).flex_1().min_h(0)))
+        .when(!this.diff && Boolean(f?.editor), (el) => el.child(Editor.new(f.editor).id(`ed-code-${f.id}-${f.gen ?? 0}`).flex_1().min_h(0)))
         .when(!this.diff && f && !f.editor && !f.error, (el) => el.child(div().p(12).text_color(t.dim).child("Loading file\u2026")))
         .when(!this.diff && !f, (el) => el.child(v_flex().size_full().items_center().justify_center().gap(8).text_color(t.dim)
           .child(div().text_size(13).text_color(t.muted).child("No file open"))

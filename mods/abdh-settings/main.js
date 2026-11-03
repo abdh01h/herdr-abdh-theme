@@ -1,4 +1,4 @@
-// abdh settings: the theme's own control panel.
+// Agentee settings: the theme's own control panel.
 //
 // Opened as an overlay with props { section? } — "appearance" | "tabs" |
 // "explorer" | "agents" | "system" | "status" | "git". A left rail switches
@@ -6,7 +6,7 @@
 //
 // This mod owns `abdh.settings`: it loads `abdh-settings.json` from appHome(),
 // merges the defaults below, publishes the result with setShared so the other
-// abdh panels react, and writes the whole file back on every edit.
+// Agentee panels react, and writes the whole file back on every edit.
 // Nothing outside this mod writes that file.
 
 import { View, div, svg } from "gpui-kit";
@@ -38,12 +38,13 @@ const EXTRA_DEFAULTS = {
     uiFont: "Geist",
     monoFont: "JetBrains Mono",
     monoSize: 13,
+    softWrap: true,
     borderIntensity: 1,
     compact: true,
   },
   tabs: {
-    minWidth: 140,
-    maxWidth: 280,
+    minWidth: 60,
+    maxWidth: 200,
     fullFilenames: true,
     closeOnHover: true,
     scrolling: true,
@@ -84,20 +85,17 @@ const NUMBERS = {
   "explorer.expandedDepth": { min: 0, max: 8, step: 1 },
   "agents.interval": { min: 2, max: 120, step: 1 },
   "system.interval": { min: 1, max: 30, step: 1 },
-  "git.refresh": { min: 1, max: 60, step: 1 },
+  "git.refresh": { min: 2, max: 60, step: 1 },
 };
 
 const SECTIONS = [
   {
     id: "appearance",
     label: "Appearance",
-    note: "Type, borders and density for the abdh layout.",
+    note: "The Agentee editor's text: size and wrapping.",
     rows: [
-      { group: "appearance", key: "uiFont", kind: "text", label: "UI font", help: "Chrome, tabs and panel labels." },
-      { group: "appearance", key: "monoFont", kind: "text", label: "Mono font", help: "Terminals, code and tabular numbers." },
-      { group: "appearance", key: "monoSize", kind: "number", label: "Mono size", help: "Terminal and code text, in px." },
-      { group: "appearance", key: "borderIntensity", kind: "number", label: "Border intensity", help: "0 none, 1 hairline, 2 strong." },
-      { group: "appearance", key: "compact", kind: "toggle", label: "Compact spacing", help: "Tighter rows and less padding." },
+      { group: "appearance", key: "monoSize", kind: "number", label: "Mono size", help: "Editor text, in px (files opened after the change)." },
+      { group: "appearance", key: "softWrap", kind: "toggle", label: "Wrap long lines", help: "Lines wrap at the editor's edge instead of scrolling sideways." },
     ],
   },
   {
@@ -115,7 +113,6 @@ const SECTIONS = [
       { group: "tabs", key: "maxWidth", kind: "number", label: "Maximum tab width", help: "Widest a tab may grow, in px." },
       { group: "tabs", key: "fullFilenames", kind: "toggle", label: "Full file names", help: "Show whole names instead of truncating." },
       { group: "tabs", key: "closeOnHover", kind: "toggle", label: "Close on hover", help: "Reveal the close button over a tab." },
-      { group: "tabs", key: "scrolling", kind: "toggle", label: "Scrolling tabs", help: "Overflow scrolls instead of compressing." },
     ],
   },
   {
@@ -126,7 +123,6 @@ const SECTIONS = [
       { group: "explorer", key: "icons", kind: "toggle", label: "File icons", help: "Draw a type icon beside each file." },
       { group: "explorer", key: "gitColors", kind: "toggle", label: "Git colors", help: "Tint changed files by their status." },
       { group: "explorer", key: "hiddenFiles", kind: "toggle", label: "Hidden files", help: "List dotfiles and other hidden entries." },
-      { group: "explorer", key: "expandedDepth", kind: "number", label: "Default expanded depth", help: "Folder levels opened when a tree loads." },
     ],
   },
   {
@@ -160,21 +156,18 @@ const SECTIONS = [
     label: "Status bar",
     note: "Which fields the status bar shows.",
     rows: [
-      { group: "status", key: "lines", kind: "toggle", label: "Line count", help: "Lines in the focused terminal buffer." },
-      { group: "status", key: "characters", kind: "toggle", label: "Character count", help: "Characters in the selection." },
-      { group: "status", key: "cursor", kind: "toggle", label: "Cursor position", help: "Line and column." },
+      { group: "status", key: "lines", kind: "toggle", label: "Line count", help: "Lines in the open file." },
+      { group: "status", key: "characters", kind: "toggle", label: "Character count", help: "Characters in the open file." },
       { group: "status", key: "gitBranch", kind: "toggle", label: "Git branch", help: "The current branch." },
       { group: "status", key: "gitChanges", kind: "toggle", label: "Git changes", help: "Counts of modified, staged and untracked files." },
-      { group: "status", key: "gitBlame", kind: "toggle", label: "Git blame", help: "Author and commit for the cursor line." },
     ],
   },
   {
     id: "git",
     label: "Git",
-    note: "The git overlay's refresh and safety.",
+    note: "The git overlay's refresh and notices.",
     rows: [
       { group: "git", key: "refresh", kind: "number", label: "Refresh interval", help: "Seconds between status reads." },
-      { group: "git", key: "confirmMerge", kind: "toggle", label: "Confirm merges", help: "Ask before a merge starts." },
       { group: "git", key: "conflictNotices", kind: "toggle", label: "Conflict notices", help: "Notify when a merge stops on conflicts." },
     ],
   },
@@ -267,7 +260,9 @@ export default class AbdhSettings extends View {
       } catch (error) {
         this.loadError = `Could not read ${this.file}: ${message(error)}`;
       }
-      this.value = merge(stored);
+      // A file that will not parse keeps what the panels already use, so one
+      // bad hand edit does not reset every setting to its default.
+      this.value = merge(this.loadError ? shared("abdh.settings") : stored);
       setShared("abdh.settings", this.value);
       this.syncInputs();
       cx.notify();
@@ -533,7 +528,7 @@ export default class AbdhSettings extends View {
       .child(div().flex_1())
       .child(v_flex().px(10).pb(4).gap(3)
         .when(Boolean(error), (el) => el.child(div().text_size(10.5).text_color(t.blocked).child(error)))
-        .child(div().text_size(10.5).text_color(t.dim).child("abdh settings"))
+        .child(div().text_size(10.5).text_color(t.dim).child("Theme settings"))
         .child(div().text_size(10).text_color(this.wrote ? t.done : t.dim).child(this.wrote ? "Saved" : "Saved to the app folder"))
         .child(div().text_size(10).text_color(t.dim).child("Esc to close")));
   }
@@ -544,14 +539,15 @@ export default class AbdhSettings extends View {
     const pageSize = 24;
     const page = Math.min(this.themePage ?? 0, Math.max(0, Math.ceil(all.length / pageSize) - 1));
     const list = all.slice(page * pageSize, page * pageSize + pageSize);
-    const chosen = shared("abdh.theme");
+    // The theme in use, however it was picked (here, Herdr Settings, the palette).
+    const s = settings();
     const dot = (c) => div().size(8).flex_none().rounded(4).bg(c || t.dim);
     return v_flex().w_full()
       .child(h_flex().pb(8).gap(8).items_center()
         .child(Input.new(this.themeInput).flex_1())
         .child(div().text_size(10.5).text_color(t.dim).child(`${all.length} themes`)))
       .children(list.map(({ name, light, colors: c }) => {
-        const on = chosen ? chosen === name : name === "abdh";
+        const on = name === (light ? s.theme_light : s.theme_dark);
         return h_flex().id(`theme-${name}`).h(30).gap(8).items_center().border_b(1).border_color(t.border)
           .cursor_pointer().when(on, (el) => el.bg(t.raised)).hover((el) => el.bg(t.hover))
           .on_click((_e, cx) => { run("app.theme", { name }); setShared("abdh.theme", name); cx.notify(); })

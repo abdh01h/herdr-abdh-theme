@@ -1,4 +1,4 @@
-// abdh menu: a small pointer popup. Items either run an app command or
+// Agentee menu: a small pointer popup. Items either run an app command or
 // publish a shared action for the mod that owns it.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";

@@ -1,11 +1,11 @@
 ---
 name: abdh-install
-description: Install or update the abdh Herdr layout/theme on this machine from github.com/abdh01h/herdr-abdh-theme. Use when the person says install abdh, set up the abdh theme/layout, update their Herdr theme, or asks what to run to get it.
+description: Install or update the Agentee Herdr layout/theme on this machine from github.com/abdh01h/herdr-abdh-theme. Use when the person says install Agentee (formerly abdh), set up the Agentee theme/layout, update their Herdr theme, or asks what to run to get it.
 ---
 
-# Install abdh for Herdr
+# Install Agentee for Herdr
 
-Goal: install the abdh layout, theme and mods into this machine's Herdr home,
+Goal: install the Agentee layout, theme and mods into this machine's Herdr home,
 verify them, and switch the layout. Report what changed.
 
 Read the full brief when in doubt:
@@ -27,8 +27,8 @@ https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/AGENT_INSTALL.md
    curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
    ```
 
-   It backs up replacements (`*.bak-<timestamp>`), installs `themes/abdh.json`,
-   `layouts/abdh.*`, `mods/abdh-*`, merges `keys.snippet.json` without replacing
+   It backs up replacements (`*.bak-<timestamp>`), installs `themes/agentee.json`,
+   `layouts/agentee.*`, `mods/abdh-*`, merges `keys.snippet.json` without replacing
    existing chords, checks the mods, and switches layout when a window runs.
 3. If piping is blocked, download and run the script file; if execution is
    blocked, install manually from a clone: copy theme/layout/mod folders and
@@ -36,8 +36,8 @@ https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/AGENT_INSTALL.md
 4. Verify:
    ```sh
    herdr-app check <herdr-home>/mods/abdh-<each>
-   herdr-app do layout.switch --name abdh
-   herdr-app status      # layout "abdh", errors []
+   herdr-app do layout.switch --name agentee
+   herdr-app status      # layout "agentee", errors []
    ```
    Windows fallback binary: `%LOCALAPPDATA%\Programs\herdr-app\herdr-app.exe`.
 5. Report the Herdr home, backups, checks, layout switch (or the exact pending

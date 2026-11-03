@@ -15,7 +15,7 @@ export const REF_FORMAT = "%(refname)%00%(refname:short)%00%(committerdate:unix)
 // `git status --porcelain=v2 --branch -z`: header lines, then one entry per
 // path. `counts` is null-safe: callers get zeroes only when status succeeded.
 export function parseStatus(text) {
-  const branch = { head: null, oid: null, upstream: null, ahead: 0, behind: 0, detached: false };
+  const branch = { head: null, oid: null, upstream: null, ahead: null, behind: null, detached: false };
   const entries = [];
   for (const entry of (text ?? "").split("\0")) {
     if (!entry) continue;
@@ -156,7 +156,7 @@ export function parseFileBlame(text) {
   const out = [];
   let cur = null;
   for (const line of (text ?? "").split("\n")) {
-    const head = /^([0-9a-f]{40}) \d+ (\d+)(?: \d+)?$/.exec(line);
+    const head = /^([0-9a-f]{40}|[0-9a-f]{64}) \d+ (\d+)(?: \d+)?$/.exec(line);
     if (head) {
       cur = { hash: head[1], short: head[1].slice(0, 7), line: Number(head[2]), author: "", time: null, summary: "", text: "" };
       continue;

@@ -1,5 +1,5 @@
-// abdh Files: project explorer with real filesystem edits, git colours,
-// search, copy/paste and a right-click menu. Files open in the abdh editor pane.
+// Agentee Files: project explorer with real filesystem edits, git colours,
+// search, copy/paste and a right-click menu. Files open in the Agentee editor pane.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, InputState } from "gpui-base";
 import {
@@ -31,16 +31,17 @@ const base = (p) => norm(p).split("/").filter(Boolean).pop() ?? p;
 const dirname = (p) => norm(p).replace(/\/[^/]*$/, "");
 const isWin = () => window()?.platform === "windows";
 
-const q = (s) => String(s).replace(/'/g, "''");
+// PowerShell also ends a '...' string at the curly single quotes.
+const q = (s) => String(s).replace(/['‘’‚‛]/g, "$&$&");
 const sh = (s) => String(s).replace(/'/g, "'\\''");
 
 async function directory(path, on) {
   if (!on && isWin()) {
     const r = await exec("powershell", ["-NoProfile", "-Command",
-      "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); & { param($p) @(Get-ChildItem -LiteralPath $p -Force -ErrorAction Stop | Select-Object -First 601 | ForEach-Object { @{ name=$_.Name; dir=($_.PSIsContainer -and (-not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -or -not $_.LinkType -or ($_.Target -and [IO.Directory]::Exists(([IO.Path]::Combine([IO.Path]::GetDirectoryName($_.FullName), $_.Target[0])))))) } }) | ConvertTo-Json -Compress } '" + q(path) + "'"]);
+      "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); & { param($p) @(Get-ChildItem -LiteralPath $p -Force -ErrorAction Stop | Select-Object -First 601 | ForEach-Object { @{ name=$_.Name; hidden=[bool]($_.Attributes -band [IO.FileAttributes]::Hidden); dir=($_.PSIsContainer -and (-not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -or -not $_.LinkType -or ($_.Target -and [IO.Directory]::Exists(([IO.Path]::Combine([IO.Path]::GetDirectoryName($_.FullName), $_.Target[0])))))) } }) | ConvertTo-Json -Compress } '" + q(path) + "'"]);
     if (r.code !== 0) throw new Error(r.stderr || "Cannot list this folder");
     const out = JSON.parse(r.stdout || "[]");
-    return (Array.isArray(out) ? out : [out]).map((e) => ({ name: e.name, dir: Boolean(e.dir) }));
+    return (Array.isArray(out) ? out : [out]).map((e) => ({ name: e.name, dir: Boolean(e.dir), hidden: Boolean(e.hidden) }));
   }
   const script = 'n=0; for p in "$1"/* "$1"/.[!.]* "$1"/..?*; do [ -e "$p" ] || [ -L "$p" ] || continue; name=${p##*/}; if [ -d "$p" ]; then kind=d; else kind=f; fi; printf "%s\\0%s\\0" "$kind" "$name"; n=$((n+1)); [ "$n" -gt 600 ] && break; done; test -d "$1"';
   const r = await exec("sh", ["-c", script, "files", path], { on });
@@ -110,7 +111,6 @@ export default class Explorer extends View {
     this.dialogInput = InputState.new({ placeholder: "name" });
     this.dialogInput.on("change", () => {});
     this.lastCmd = null;
-    this.lastOpen = null;
     if (props()?.dialog) { this.startDialog(); return; }
     // Render-time spawns do not run; poll shared commands and folder state
     // from timer tasks instead (the editor opening was stalled by this).
@@ -211,10 +211,17 @@ export default class Explorer extends View {
     cx.spawn(async (cx) => {
       try {
         let list = await directory(this.abs(rel), on);
-        if (!settings().explorer.hiddenFiles) list = list.filter((e) => !e.name.startsWith("."));
-        if (this.root === root) this.entries.set(rel, list);
+        // Dotfiles everywhere; on Windows also the Hidden attribute (NTUSER.DAT,
+        // AppData, the "Application Data" style junctions).
+        if (!settings().explorer.hiddenFiles) list = list.filter((e) => !e.hidden && !e.name.startsWith("."));
+        if (this.root === root) { this.entries.set(rel, list); if (!rel) this.error = null; }
       } catch (e) {
-        if (this.root === root) this.error = String(e.message ?? e);
+        if (this.root === root) {
+          // A folder that cannot be listed closes again instead of being
+          // retried by every refresh.
+          if (rel) { this.folders.delete(rel); notify({ title: "Cannot open folder", body: String(e.message ?? e).split("\n")[0], level: "error" }); }
+          else { this.error = String(e.message ?? e); this.entries.set("", []); }
+        }
       } finally {
         this.loading.delete(rel);
         cx.notify();
@@ -225,15 +232,20 @@ export default class Explorer extends View {
   watch(cx) {
     if (this.on || this.watched === this.root) return;
     this.watched = this.root;
-    const root = this.root, context = this.context;
+    // One loop per root visit; reload only the listed folders a change touched
+    // (a home root watches all of AppData on Windows).
+    const root = this.root, context = this.context, gen = (this.watchGen = (this.watchGen ?? 0) + 1);
     cx.spawn(async (cx) => {
       try {
         for (;;) {
-          await watchFolder(root);
-          if (this.root !== root) return;
-          this.load("", cx);
-          for (const f of this.folders) this.load(f, cx);
-          this.loadGit(cx);
+          const changed = await watchFolder(root);
+          if (this.root !== root || this.watchGen !== gen) return;
+          const k = (p) => { const n = norm(p).replace(/\/+$/, ""); return isWin() ? n.toLowerCase() : n; };
+          const parents = new Set(changed.map((p) => k(dirname(p))));
+          const all = changed.some((p) => k(p) === k(root));
+          if (all || parents.has(k(root))) this.load("", cx);
+          for (const f of this.folders) if (all || parents.has(k(this.abs(f)))) this.load(f, cx);
+          if (this.git) this.loadGit(cx);
           cx.notify();
         }
       } catch { if (this.context === context) this.watched = null; }
@@ -282,8 +294,9 @@ export default class Explorer extends View {
   // ---- shared actions from the menu / dialogs -----------------------------
   consume(cx) {
     if (props()?.dialog) return;
-    const cmd = shared("abdh.explorer.cmd"), open = shared("abdh.open");
-    if (open && open.nonce !== this.lastOpen) { this.lastOpen = open.nonce; this.openFile(open.path); }
+    // abdh.open is the editor's inbox (openFile writes it); reading it here too
+    // re-opened the file on every tick.
+    const cmd = shared("abdh.explorer.cmd");
     if (!cmd || cmd.nonce === this.lastCmd) return;
     this.lastCmd = cmd.nonce;
     // One shot per click/menu choice: a reloaded or cloned copy must not replay it.
@@ -291,7 +304,7 @@ export default class Explorer extends View {
     const root = cmd.root ?? this.root;
     if (cmd.action === "open") this.openFile(cmd.path);
     else if (cmd.action === "reveal") this.shell("reveal", cmd.path).catch((e) => notify({ title: "Reveal failed", body: String(e.message), level: "error" }));
-    else if (cmd.action === "blame") openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: cmd.root ?? this.root, file: cmd.path } });
+    else if (cmd.action === "blame") openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(cmd.path), file: cmd.path } });
     else if (cmd.action === "refresh") { this.entries.clear(); this.folders.clear(); this.load("", cx); this.loadGit(cx); }
     else if (cmd.action === "paste") this.paste(cmd.dir ?? dirname(cmd.path), cx);
     else if (cmd.action === "copy" || cmd.action === "cut") setShared("abdh.clipboard", { path: cmd.path, cut: cmd.action === "cut" });
@@ -304,6 +317,8 @@ export default class Explorer extends View {
   async paste(dir, cx) {
     const clip = shared("abdh.clipboard");
     if (!clip) return;
+    const src = norm(clip.path).replace(/\/+$/, "").toLowerCase(), into = norm(dir).replace(/\/+$/, "").toLowerCase();
+    if (into === src || into.startsWith(src + "/")) { notify({ title: "Paste failed", body: "Cannot paste a folder into itself", level: "error" }); return; }
     try {
       await this.shell("copy", clip.path, join(dir, base(clip.path)));
       if (clip.cut) { await this.shell("remove", clip.path); setShared("abdh.clipboard", null); }
@@ -315,8 +330,8 @@ export default class Explorer extends View {
   openFile(path) {
     const tab = focused()?.tab;
     const pane = panes().find((p) => p.mod === "abdh-editor" && p.tab === tab);
-    if (pane) { setShared("abdh.open", { path, nonce: `${Date.now()}-${Math.random()}` }); run("pane.focus", { pane: pane.pane }); return; }
-    run("pane.split", { direction: "right", mod: "abdh-editor", props: { path, root: this.root } });
+    if (pane) { setShared("abdh.open", { path, root: this.root, on: this.on ?? null, tab, nonce: `${Date.now()}-${Math.random()}` }); run("pane.focus", { pane: pane.pane }); return; }
+    run("pane.split", { direction: "right", mod: "abdh-editor", props: { path, root: this.root, on: this.on ?? null } });
   }
 
   // ---- search -------------------------------------------------------------
@@ -327,10 +342,10 @@ export default class Explorer extends View {
     cx.spawn(async (cx) => {
       try {
         // 1) Names: tracked + untracked, ignored files left out.
-        let files = [];
+        let files = [], isRepo = false;
         if (!on) {
           const g = await exec("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { on }).catch(() => null);
-          if (g && g.code === 0) files = g.stdout.split("\0").filter(Boolean).map((p) => `${norm(root)}/${p}`);
+          if (g && g.code === 0) isRepo = true, files = g.stdout.split("\0").filter(Boolean).map((p) => `${norm(root)}/${p}`);
         }
         if (!files.length) {
           const shallow = norm(root) === norm(home()) ? 3 : 7;
@@ -352,12 +367,11 @@ export default class Explorer extends View {
           if (hits.length >= 200) return;
           hits.push({ path: norm(path), line, snippet: String(text ?? "").trim().slice(0, 220) });
         };
-        const isRepo = files.length > 0;
         const atHome = norm(root) === norm(home());
         if (atHome) {
           this.searchNote = "Content search is off at home. Open a project folder.";
         } else if (isRepo) {
-          const gg = await exec("git", ["grep", "-n", "-I", "-i", "-m", "1", "--untracked", "--", term], { cwd: root, on }).catch(() => null);
+          const gg = await exec("git", ["grep", "-n", "-I", "-i", "-F", "-m", "1", "--untracked", "-e", term], { cwd: root, on }).catch(() => null);
           if (gg && (gg.code === 0 || gg.code === 1)) {
             for (const line of gg.stdout.split("\n")) {
               const a = line.indexOf(":"), b = a < 0 ? -1 : line.indexOf(":", a + 1);
@@ -366,7 +380,7 @@ export default class Explorer extends View {
             }
           }
         } else {
-          const rg = await exec("rg", ["--json", "--smart-case", "--hidden", "-I", "-j", "2", "--max-depth", "12",
+          const rg = await exec("rg", ["--json", "--fixed-strings", "--smart-case", "--hidden", "-I", "-j", "2", "--max-depth", "12",
             "--max-count", "1", "--max-filesize", "1M", "--no-messages",
             "--glob", "!**/.git/**", "--glob", "!**/node_modules/**", "--glob", "!**/vendor/**", "--glob", "!**/dist/**", "--glob", "!**/build/**",
             term, root], { on }).catch(() => null);
@@ -382,7 +396,7 @@ export default class Explorer extends View {
           }
         }
 
-        if (this.root !== root) return;
+        if (this.root !== root || this.query.trim() !== term) return;
         if (!atHome) this.searchNote = "";
         const low = term.toLowerCase();
         const seen = new Set(hits.map((h) => h.path.toLowerCase()));

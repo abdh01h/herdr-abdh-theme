@@ -1,5 +1,5 @@
 #!/bin/sh
-# abdh — one-command install for macOS and Linux.
+# Agentee — one-command install for macOS and Linux.
 #
 #   curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
 #
@@ -27,25 +27,25 @@ backup() {
 }
 BACKUPS=""
 
-echo "==> abdh: downloading $REPO@$BRANCH"
+echo "==> Agentee: downloading $REPO@$BRANCH"
 URL="https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH"
 if command -v curl >/dev/null 2>&1; then
   curl -fsSL "$URL" -o "$TMP/theme.tgz"
 elif command -v wget >/dev/null 2>&1; then
   wget -qO "$TMP/theme.tgz" "$URL"
 else
-  echo "abdh: need curl or wget" >&2
+  echo "Agentee: need curl or wget" >&2
   exit 1
 fi
 
 tar -xzf "$TMP/theme.tgz" -C "$TMP"
 ROOT="$(find "$TMP" -maxdepth 1 -mindepth 1 -type d | head -n 1)"
-[ -n "$ROOT" ] || { echo "abdh: archive had no repository folder" >&2; exit 1; }
+[ -n "$ROOT" ] || { echo "Agentee: archive had no repository folder" >&2; exit 1; }
 
 mkdir -p "$HOME_DIR/themes" "$HOME_DIR/layouts" "$HOME_DIR/mods"
-echo "==> abdh: installing into $HOME_DIR"
+echo "==> Agentee: installing into $HOME_DIR"
 
-for file in themes/abdh.json layouts/abdh.json layouts/abdh.svg; do
+for file in themes/agentee.json layouts/agentee.json layouts/agentee.svg; do
   [ -f "$ROOT/$file" ] || continue
   backup "$HOME_DIR/$file"
   cp "$ROOT/$file" "$HOME_DIR/$file"
@@ -75,7 +75,7 @@ if os.path.exists(keys_path):
     try:
         keys = json.load(open(keys_path, encoding="utf-8"))
     except Exception:
-        print("abdh: keys.json is not valid JSON; left it untouched", file=sys.stderr)
+        print("Agentee: keys.json is not valid JSON; left it untouched", file=sys.stderr)
         raise SystemExit(0)
 for section, bindings in snippet.items():
     target = keys.setdefault(section, {})
@@ -95,7 +95,7 @@ const snippet = JSON.parse(fs.readFileSync(snippetPath, "utf8"));
 let keys = {};
 if (fs.existsSync(keysPath)) {
   try { keys = JSON.parse(fs.readFileSync(keysPath, "utf8")); }
-  catch { console.error("abdh: keys.json is not valid JSON; left it untouched"); process.exit(0); }
+  catch { console.error("Agentee: keys.json is not valid JSON; left it untouched"); process.exit(0); }
 }
 for (const [section, bindings] of Object.entries(snippet)) {
   if (!keys[section] || typeof keys[section] !== "object") keys[section] = {};
@@ -110,7 +110,7 @@ fi
 
 if command -v herdr-app >/dev/null 2>&1; then
   if [ -d "$HOME_DIR/mods/workspace-chrome" ]; then
-  echo "==> abdh: checking mods"
+  echo "==> Agentee: checking mods"
   failed=0
   for mod in "$HOME_DIR"/mods/abdh-*; do
     [ -d "$mod" ] || continue
@@ -120,21 +120,21 @@ if command -v herdr-app >/dev/null 2>&1; then
       failed=$((failed + 1))
     fi
   done
-  [ "$failed" -eq 0 ] && echo "    all abdh mods pass"
+  [ "$failed" -eq 0 ] && echo "    all Agentee mods pass"
   else
-    echo "==> abdh: start Herdr once (it installs its shipped mods), then: herdr-app check <each abdh mod>"
+    echo "==> Agentee: start Herdr once (it installs its shipped mods), then: herdr-app check <each Agentee mod>"
   fi
 
   if [ "${NO_LAYOUT:-0}" != "1" ]; then
-    if herdr-app do layout.switch --name abdh >/dev/null 2>&1; then
-      echo "==> abdh: layout switched"
+    if herdr-app do layout.switch --name agentee >/dev/null 2>&1; then
+      echo "==> Agentee: layout switched"
     else
-      echo "==> abdh: open Herdr and run: herdr-app do layout.switch --name abdh"
+      echo "==> Agentee: open Herdr and run: herdr-app do layout.switch --name agentee"
     fi
   fi
 else
-  echo "==> abdh: herdr-app not found; open Herdr and run: herdr-app do layout.switch --name abdh"
+  echo "==> Agentee: herdr-app not found; open Herdr and run: herdr-app do layout.switch --name agentee"
 fi
 
-[ -n "$BACKUPS" ] && echo "==> abdh: backups:$BACKUPS"
-echo "==> abdh: done. Settings: $HOME_DIR/abdh-settings.json (open abdh settings in the sidebar footer)."
+[ -n "$BACKUPS" ] && echo "==> Agentee: backups:$BACKUPS"
+echo "==> Agentee: done. Settings: $HOME_DIR/abdh-settings.json (open Theme settings in the sidebar footer)."

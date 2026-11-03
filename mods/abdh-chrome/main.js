@@ -1,8 +1,8 @@
-// abdh chrome: the sidebar's top brand bar and its foot.
+// Agentee chrome: the sidebar's top brand bar and its foot.
 //   brand  : wordmark, search, sidebar toggle
-//   footer : abdh settings, the keybind list beside it, and Herdr's own settings
+//   footer : Theme settings, Herdr settings, Add machine and the keybind list
 import { View, div, svg } from "gpui-kit";
-import { h_flex, v_flex, set_theme } from "gpui-base";
+import { h_flex, set_theme } from "gpui-base";
 import { theme, run, props, window, shared, setShared, layout, keys, openOverlay, appHome, readTextFile } from "herdr";
 
 function find(node, id) {
@@ -13,6 +13,11 @@ function find(node, id) {
   }
   return null;
 }
+
+const panelShown = () => {
+  const panel = find(layout(), "panel");
+  return Boolean(panel) && !panel.hidden;
+};
 
 const narrow = () => (find(layout(), "sidebar")?.size?.px ?? Infinity) < 180;
 
@@ -40,19 +45,26 @@ export default class Chrome extends View {
     // The shell leaves an editor's selection colour unset, so Base paints it
     // with the theme's `hover` at 40% — invisible on a dark hover. Republish the
     // palette with `selection` set to the theme's own selection colour.
+    // cx.theme().colors reads back as #rrggbb with the alpha dropped, so the
+    // colours set here come from theme(), and a change is spotted by comparing
+    // against what Base read back after our own set_theme.
+    let synced = null;
     const syncBase = (cx) => {
       try {
         const base = cx.theme();
         const app = theme();
         if (!base?.colors) return;
+        const key = JSON.stringify([base.appearance, base.colors, app.accent, app.selection]);
+        if (key === synced) return;
         // The editor paints an unset selection with Base's *accent* at 40%.
         // The app maps accent from the theme's hover (near the background), so
         // the highlight disappeared. Point accent at the theme accent and set
-        // selection to the theme's own selection colour.
-        const wantSel = app.selection || app.accent;
-        const colors = { ...base.colors, accent: app.accent, selection: wantSel };
-        if (colors.accent === base.colors.accent && colors.selection === base.colors.selection) return;
+        // selection to the theme's own selection colour. The editor's indent
+        // guides are Base `border`; a clear border removes them.
+        const colors = { ...base.colors, accent: app.accent, selection: app.selection || app.accent, border: "#00000000" };
         set_theme({ appearance: base.appearance, tokens: { colors, spacing: base.spacing, radius: base.radius } });
+        const after = cx.theme();
+        synced = JSON.stringify([after.appearance, after.colors, app.accent, app.selection]);
       } catch { /* older host without set_theme */ }
     };
     cx.timer.every(1000, (timerCx) => syncBase(timerCx));
@@ -64,7 +76,8 @@ export default class Chrome extends View {
         if (!text) return;
         const stored = JSON.parse(text);
         const base = shared("abdh.settings") ?? {};
-        setShared("abdh.settings", { ...stored, ...base });
+        // The file wins: a hand edit takes effect at the next start.
+        setShared("abdh.settings", { ...base, ...stored });
       } catch { /* an unreadable file means defaults */ }
     });
   }
@@ -77,35 +90,36 @@ export default class Chrome extends View {
       .child(svg(`mods/abdh-chrome/icons/${icon}.svg`).size(15));
   }
 
-  row(t, id, icon, label, dim, action) {
-    return h_flex().id(id).h(28).px(8).gap(9).items_center().rounded(7).flex_1().min_w(0)
-      .text_color(dim ? t.dim : t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .cursor_pointer().on_click(action)
-      .child(svg(`mods/abdh-chrome/icons/${icon}.svg`).size(14).flex_none())
-      .when(!narrow(), (el) => el.child(div().truncate().child(label)));
-  }
-
   render() {
     const t = theme();
     if (props()?.role === "footer") {
-      return v_flex().size_full().bg(t.chrome).border_t(1).border_color(t.border).px(8).pt(4).pb(6).gap(1).text_size(12.5)
-        .child(h_flex().items_center().gap(2)
-          .child(this.row(t, "settings", "settings", "abdh settings", false, () =>
-            openOverlay({ mod: "abdh-settings", kind: "dialog", width: 780, height: 620 })))
+      // One row of tools; a collapsed rail only has room for Theme settings.
+      const abdhSettings = this.button(t, "settings", "sliders", () =>
+        openOverlay({ mod: "abdh-settings", kind: "dialog", width: 780, height: 620 }), "Theme settings");
+      return h_flex().size_full().bg(t.chrome).border_t(1).border_color(t.border).px(8).gap(2).items_center()
+        .when(narrow(), (el) => el.justify_center().child(abdhSettings))
+        .when(!narrow(), (el) => el
+          .child(abdhSettings)
+          .child(this.button(t, "herdr-settings", "settings", () => run("app.settings"),
+            `Herdr settings${keyFor("app.settings") ? "  " + keyFor("app.settings") : ""}`))
+          .child(this.button(t, "add-machine", "server", () => run("mod.open", { name: "machine-add" }), "Add machine"))
+          .child(div().flex_1())
           .child(this.button(t, "shortcuts", "keyboard", () => run("app.help"),
-            `Keyboard shortcuts${keyFor("app.help") ? "  " + keyFor("app.help") : ""}`)))
-        .child(this.row(t, "herdr-settings", "settings", "Herdr settings", true, () => run("app.settings")));
+            `Keyboard shortcuts${keyFor("app.help") ? "  " + keyFor("app.help") : ""}`)));
     }
     const lights = window()?.platform === "macos" && window()?.titlebar === "none" && !window()?.fullscreen;
     return h_flex().size_full().bg(t.chrome).pl(lights && !narrow() ? 76 : 12).pr(8).gap(2).items_center()
       .child(h_flex().id("abdh-brand").flex_1().min_w(0).gap(7).items_center()
         .child(div().size(7).rounded(2).bg(t.accent))
-        .when(!narrow(), (el) => el.child(div().font_semibold().text_size(13).text_color(t.foreground).child("abdh"))))
+        .when(!narrow(), (el) => el.child(div().font_semibold().text_size(13).text_color(t.foreground).child("Agentee"))))
       .when(!narrow(), (el) => el.child(this.button(t, "search", "search", () => run("mod.open", { name: "picker" }), "Find a command or file")))
+      // A toggle, like the window bar's tools: hides the panel when it shows.
       .when(!narrow(), (el) => el.child(this.button(t, "panel", "folder", () => {
+        if (panelShown()) { run("layout.hide", { id: "panel" }); return; }
         run("layout.show", { id: "panel" });
         run("layout.select", { stack: "panel-body", child: "panel-files" });
-      }, "Show Files, Agents and System")))
+      }, panelShown() ? "Hide Files, Agents and System" : "Show Files, Agents and System")
+        .when(panelShown(), (b) => b.bg(t.raised).text_color(t.accent))))
       .child(this.button(t, "sidebar-toggle", "sidebar", toggleSidebar, narrow() ? "Show sidebar" : "Hide sidebar"));
   }
 }

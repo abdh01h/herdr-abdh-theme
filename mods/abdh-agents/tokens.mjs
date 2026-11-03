@@ -23,7 +23,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const FIELDS = ["input", "output", "cacheRead", "cacheWrite", "reasoning"];
 const HOUR_BUCKETS = 24;
 const DAY_BUCKETS = 30;
@@ -92,12 +92,23 @@ function record(summary, { timestamp, session, model, project, tokens, key }) {
   };
   t.reasoning = n(tokens.reasoning);
   if (totalOf(t) <= 0) return false;
-  if (key) {
-    if (summary.keys[key]) return false;
-    summary.keys[key] = 1;
-  }
   const when = stamp(timestamp);
   if (when === null) return false;
+  let events = 1;
+  if (key) {
+    const seen = summary.keys[key];
+    if (seen) {
+      // Claude Code writes one line per content block; a later line of the same
+      // message can carry the larger, final output count. Add only the growth.
+      if (!Array.isArray(seen) || t.output <= seen[0]) return false;
+      const grown = { input: 0, output: t.output - seen[0], cacheRead: 0, cacheWrite: 0, reasoning: Math.max(0, t.reasoning - seen[1]) };
+      summary.keys[key] = [t.output, Math.max(seen[1], t.reasoning)];
+      Object.assign(t, grown);
+      events = 0;
+    } else {
+      summary.keys[key] = [t.output, t.reasoning];
+    }
+  }
   const date = new Date(when);
   const label = model && model !== "unknown" ? String(model) : "unknown";
   const sessionId = session || `${summary.harness}:unknown`;
@@ -118,17 +129,17 @@ function record(summary, { timestamp, session, model, project, tokens, key }) {
   entry.last = Math.max(entry.last, when);
   entry.model = label;
   if (project && project !== "unknown") entry.project = project;
-  add(entry.tokens, { ...t, events: 1 });
+  add(entry.tokens, { ...t, events });
 
   let modelEntry = summary.models[label];
   if (!modelEntry) modelEntry = summary.models[label] = zero();
-  add(modelEntry, { ...t, events: 1 });
+  add(modelEntry, { ...t, events });
 
   const hk = hourKey(date), dk = dayKey(date), mk = monthKey(date);
   summary.hours[hk] = (summary.hours[hk] || 0) + totalOf(t);
   summary.days[dk] = (summary.days[dk] || 0) + totalOf(t);
   summary.months[mk] = (summary.months[mk] || 0) + totalOf(t);
-  summary.events += 1;
+  summary.events += events;
   return true;
 }
 

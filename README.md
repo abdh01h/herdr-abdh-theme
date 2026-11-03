@@ -1,8 +1,8 @@
-# abdh — a Carbon Herdr layout
+# Agentee — a Carbon Herdr layout
 
 A compact, Carbon-inspired Herdr workspace: a left rail for spaces and agents, an icon-tabbed panel on the right (Files, Agents, System), an editor with diff and blame, git branch/merge actions, and a bottom file/git status bar.
 
-![abdh](preview.png)
+![Agentee](preview.png)
 
 *Screenshot uses a demo project, not a personal workspace.*
 
@@ -39,13 +39,13 @@ Options: `-HerdrHome <path>` / `HERDR_APP_HOME`, `-Branch <name>` / `BRANCH`,
 
 Point any coding agent at the repository and say:
 
-> Install the abdh Herdr theme from https://github.com/abdh01h/herdr-abdh-theme —
+> Install the Agentee Herdr theme from https://github.com/abdh01h/herdr-abdh-theme —
 > read `AGENT_INSTALL.md` and do it end to end, then switch the layout and show
 > me the check/status output.
 
 The repo ships the brief (`AGENT_INSTALL.md`), a root `AGENTS.md`, and a
 Claude Code skill at `.claude/skills/abdh-install/SKILL.md`. With the repository
-as the working project, “install abdh” is enough. To make the skill available
+as the working project, “install Agentee” is enough. To make the skill available
 from any project, copy that folder to `~/.claude/skills/` (the installer does
 not do this automatically).
 
@@ -53,14 +53,14 @@ not do this automatically).
 
 Herdr reads `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides it). Back it up first.
 
-1. `themes/abdh.json` → `~/.config/herdr-app/themes/`
-2. `layouts/abdh.json`, `layouts/abdh.svg` → `~/.config/herdr-app/layouts/`
+1. `themes/agentee.json` → `~/.config/herdr-app/themes/`
+2. `layouts/agentee.json`, `layouts/agentee.svg` → `~/.config/herdr-app/layouts/`
 3. every `mods/abdh-*` folder → `~/.config/herdr-app/mods/`
 4. merge `keys.snippet.json` into `~/.config/herdr-app/keys.json`
 5. `herdr-app check ~/.config/herdr-app/mods/abdh-<name>` for each folder, then
-   `herdr-app do layout.switch --name abdh`
+   `herdr-app do layout.switch --name agentee`
 
-Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by `abdh-settings` (open it from the sidebar footer → **abdh settings**).
+Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by `abdh-settings` (open it from the sidebar footer → **Theme settings**).
 
 ## What you get
 
@@ -100,13 +100,13 @@ The editor also has **Diff**, **Blame**, **Save** and a pane-close button. `abdh
 - **Diff** is a separate read-only view, not an inline gutter: the editor API exposes no decorations.
 - Remote (ssh machine) files open read-only in the editor.
 - Pane dragging is disabled (`"movable": false`) so the top-center grip never covers content.
-- Herdr's own Settings → Look draws one card per theme file; this repo ships a paged theme picker in **abdh settings → Themes** instead.
+- Herdr's own Settings → Look draws one card per theme file; this repo ships a paged theme picker in **Theme settings → Themes** instead.
 - `abdh-spaces` and `abdh-agents-list` are derived from Herdr's Apache-2.0 `spaces`/`agents` mods; the token scanner in `abdh-agents` is derived from the `insights` mod. See `NOTICE`.
 
 ## Layout files
 
-- `layouts/abdh.json` — the window tree (left rail, work area, right panel, status bar), theme `abdh`, no pane headers, `movable: false`.
-- `themes/abdh.json` — Carbon palette with `selection` and component colors.
+- `layouts/agentee.json` — the window tree (left rail, work area, right panel, status bar), theme `agentee`, no pane headers, `movable: false`.
+- `themes/agentee.json` — Carbon palette with `selection` and component colors.
 - `.claude/skills/abdh-theme/SKILL.md` — an agent skill for installing, verifying and modifying this theme.
 
 ## License

@@ -1,4 +1,4 @@
-// abdh-agents — agents and token analytics for the abdh theme.
+// abdh-agents — agents and token analytics for the Agentee theme.
 //
 // Live identity comes from `agents()`/`terminals()`/`panes()`/`spaces()`;
 // token numbers come from provider usage records in the agents' own session
@@ -202,7 +202,7 @@ export default class AgentsPanel extends View {
     cx.timer.every(1000, (cx) => {
       const now = Date.now();
       const settings = agentSettings();
-      if (!this.paused && settings.enabled && !this.scanning && now - this.lastScan >= settings.interval * 1000) {
+      if (!this.paused && settings.enabled && settings.showTokens && !this.scanning && now - this.lastScan >= settings.interval * 1000) {
         this.scan(cx);
       }
       const busy = agents().some((agent) => agent.status === "working");
@@ -216,7 +216,7 @@ export default class AgentsPanel extends View {
   scan(cx) {
     if (this.scanning) return;
     const settings = agentSettings();
-    if (!settings.enabled) return;
+    if (!settings.enabled || !settings.showTokens) return;
     this.scanning = true;
     this.lastScan = Date.now();
     const script = `${appHome()}/${SCRIPT}`;
@@ -429,9 +429,10 @@ export default class AgentsPanel extends View {
       ),
       h_flex().w_full().flex_wrap().gap(6).children([
         this.stat(t, "Input", compact(totals.input), `${exact(totals.input)} input tokens`),
-        this.stat(t, "Output", compact(totals.output), `${exact(totals.output)} output tokens (reasoning included)`),
+        // Claude Code sub-agent transcripts log partial output usage: a floor.
+        this.stat(t, "Output", `≥${compact(totals.output)}`, `at least ${exact(totals.output)} output tokens (reasoning included); Claude Code sub-agent transcripts log partial output usage`),
         this.stat(t, "Cached", compact(totals.cacheRead), `${exact(totals.cacheRead)} cache-read tokens (also counted in total)`),
-        this.stat(t, "Total", compact(totals.total), `${exact(totals.total)} input + output + cache tokens`, t.accent),
+        this.stat(t, "Total", `≥${compact(totals.total)}`, `at least ${exact(totals.total)} input + output + cache tokens`, t.accent),
       ]),
       h_flex().w_full().gap(8).items_center()
         .child(div().min_w(0).text_size(9.5).text_color(t.dim).child([
@@ -441,7 +442,7 @@ export default class AgentsPanel extends View {
           `cache write ${compact(totals.cacheWrite)}`,
         ].filter(Boolean).join(" · ")))
         .child(div().flex_1())
-        .child(this.badge(t, "all measured", t.accent)),
+        .child(this.badge(t, "from transcripts · output is a floor", t.dim)),
       this.sourcesLine(t, snapshot),
       snapshot.scan
         ? div().text_size(9).text_color(t.dim).child([
@@ -656,7 +657,7 @@ export default class AgentsPanel extends View {
     const rows = list.map((agent) => {
       const term = all.find((item) => item.address === agent.address) ?? null;
       const pane = paneByTerminal.get(agent.address) ?? null;
-      const match = settings.showTokens && this.tokens
+      const match = settings.showTokens && this.tokens && !this.tokensError
         ? this.matchSession(agent, term, pane, this.tokens.sessions, used)
         : null;
       if (match) used.add(match.session.id);
@@ -712,7 +713,7 @@ export default class AgentsPanel extends View {
       }
     }
     body.push(this.agentsCard(t, rows, settings, now));
-    if (settings.showTokens && settings.enabled && this.tokens) {
+    if (settings.showTokens && settings.enabled && this.tokens && !this.tokensError) {
       body.push(this.modelsCard(t, this.tokens));
       body.push(this.sessionsCard(t, this.tokens, now));
     }

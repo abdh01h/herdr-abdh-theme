@@ -6,8 +6,8 @@
     12,
     16
   ],
-  "theme": "abdh",
-  "preview": "layouts/abdh.svg",
+  "theme": "agentee",
+  "preview": "layouts/agentee.svg",
   "background": "canvas",
   "font": "JetBrains Mono",
   "font_size": 13,
@@ -72,7 +72,7 @@
           "id": "sidebar-footer",
           "type": "block",
           "size": {
-            "px": 66
+            "px": 40
           },
           "content": {
             "mod": "abdh-chrome",

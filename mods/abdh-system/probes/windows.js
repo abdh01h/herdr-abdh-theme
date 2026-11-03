@@ -27,15 +27,12 @@ $os = @(Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,Bu
 $cpu = @(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed,Manufacturer)
 $vc = @(Get-CimInstance Win32_VideoController | Select-Object Name,AdapterCompatibility,DriverVersion)
 $bat = @(Get-CimInstance Win32_Battery | Select-Object EstimatedChargeRemaining,BatteryStatus)
-$thermal = @(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object CurrentTemperature)
-$lhm = @()
-try { $lhm = @(Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -ErrorAction Stop | Where-Object { $_.SensorType -eq 'Temperature' } | Select-Object Name,Value) } catch { }
 $keys = @()
 Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' | ForEach-Object { $keys += Get-ItemProperty $_.PSPath }
 $gpus = @()
 foreach ($v in $vc) {
   $mem = $null
-  foreach ($k in $keys) { if ($k.'HardwareInformation.AdapterString' -eq $v.Name) { $mem = $k.'HardwareInformation.qwMemorySize' } }
+  foreach ($k in $keys) { if ($k.DriverDesc -eq $v.Name -and $k.'HardwareInformation.qwMemorySize') { $mem = $k.'HardwareInformation.qwMemorySize' } }
   $gpus += [pscustomobject]@{ name = $v.Name; vendor = $v.AdapterCompatibility; driver = $v.DriverVersion; vramTotal = $mem }
 }
 $boot = $null
@@ -46,8 +43,6 @@ $cpuInfo = $null
 if ($cpu.Count -gt 0) { $cpuInfo = [pscustomobject]@{ model = $cpu[0].Name; cores = $cpu[0].NumberOfCores; logical = $cpu[0].NumberOfLogicalProcessors; maxMhz = $cpu[0].MaxClockSpeed; mhz = $cpu[0].CurrentClockSpeed; vendor = $cpu[0].Manufacturer } }
 $batInfo = $null
 if ($bat.Count -gt 0) { $batInfo = [pscustomobject]@{ percent = $bat[0].EstimatedChargeRemaining; status = $bat[0].BatteryStatus } }
-$temps = @()
-foreach ($t in $thermal) { if ($t.CurrentTemperature) { $temps += [double]$t.CurrentTemperature } }
 $obj = [pscustomobject]@{
   hostname = $env:COMPUTERNAME
   arch = $env:PROCESSOR_ARCHITECTURE
@@ -56,8 +51,6 @@ $obj = [pscustomobject]@{
   cpu = $cpuInfo
   gpus = $gpus
   battery = $batInfo
-  thermal = $temps
-  lhm = $lhm
 }
 $obj | ConvertTo-Json -Compress -Depth 5
 `;
@@ -85,6 +78,9 @@ $ld = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object 
 $dsk = @(Get-CimInstance Win32_PerfRawData_PerfDisk_LogicalDisk | Select-Object Name,DiskReadBytesPersec,DiskWriteBytesPersec,PercentDiskTime,Timestamp_Sys100NS)
 $net = @(Get-CimInstance Win32_PerfRawData_Tcpip_NetworkInterface | Select-Object Name,BytesReceivedPersec,BytesSentPersec,Timestamp_Sys100NS)
 $pf = @(Get-CimInstance Win32_PageFileUsage | Select-Object AllocatedBaseSize,CurrentUsage)
+$mem = @(Get-CimInstance Win32_PerfRawData_PerfOS_Memory | Select-Object FreeAndZeroPageListBytes)
+$lhm = @()
+try { $lhm = @(Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType='Temperature'" -ErrorAction Stop | Select-Object Name,Value,Identifier) } catch { }
 $eng = @()
 ${slow ? GPU_ENGINE_CODE : ""}
 $obj = [pscustomobject]@{
@@ -95,6 +91,8 @@ $obj = [pscustomobject]@{
   perfDisk = $dsk
   net = $net
   pageFile = $pf
+  mem = $mem
+  lhm = $lhm
   gpuEngine = $eng
 }
 $obj | ConvertTo-Json -Compress -Depth 5
@@ -185,25 +183,23 @@ function windowsCpu(perf, staticCpu, previous) {
       logical: num(base.logical),
       usage: usage === null ? null : Math.round(usage * 10) / 10,
       perCore: cores.length > 0 ? cores.map((v) => Math.round(v * 10) / 10) : null,
-      mhz: num(base.mhz),
+      // CurrentClockSpeed reads the base clock, not the live one.
+      mhz: null,
       maxMhz: num(base.maxMhz),
       tempC: null,
     },
   };
 }
 
-function windowsTemps(thermal, lhm) {
-  // LibreHardwareMonitor exposes real package/core sensors when installed;
-  // prefer those over ACPI zones, which are not the CPU's core temperature.
+function windowsTemps(lhm) {
+  // Only LibreHardwareMonitor's CPU hardware (/amdcpu/, /intelcpu/) counts:
+  // its "GPU Core" sensor also matches a name filter, and ACPI zones are
+  // ambient, not the CPU. Without it the temperature is unavailable.
   const core = list(lhm)
-    .filter((sensor) => /cpu|core|package|tctl|tdie|ccd/i.test(String(sensor.Name ?? "")))
+    .filter((sensor) => /^\/(amdcpu|intelcpu)\//i.test(String(sensor.Identifier ?? "")))
     .map((sensor) => num(sensor.Value))
     .filter((value) => value !== null && value > 0 && value < 150);
-  if (core.length > 0) return Math.max(...core);
-  const values = list(thermal)
-    .map((value) => (num(value) === null ? null : Number(value) / 10 - 273.15))
-    .filter((value) => value !== null && value > 0 && value < 150);
-  return values.length > 0 ? Math.max(...values) : null;
+  return core.length > 0 ? Math.max(...core) : null;
 }
 
 function windowsGpus(staticGpus, nvidiaRows, engineRows) {
@@ -225,12 +221,12 @@ function windowsGpus(staticGpus, nvidiaRows, engineRows) {
     };
     const match = list(nvidiaRows).find(
       (candidate) =>
-        !used.has(candidate.name) &&
+        !used.has(candidate) &&
         (candidate.name.toLowerCase() === name.toLowerCase() ||
           name.toLowerCase().includes(candidate.name.toLowerCase())),
     );
     if (match) {
-      used.add(match.name);
+      used.add(match);
       row.usage = match.usage;
       row.memUsed = match.memUsed;
       row.memTotal = match.memTotal ?? row.memTotal;
@@ -241,7 +237,7 @@ function windowsGpus(staticGpus, nvidiaRows, engineRows) {
     result.push(row);
   }
   for (const row of list(nvidiaRows)) {
-    if (used.has(row.name)) continue;
+    if (used.has(row)) continue;
     result.push({
       id: `nv:${row.name}`,
       name: row.name,
@@ -269,7 +265,7 @@ function windowsGpus(staticGpus, nvidiaRows, engineRows) {
 export async function collectWindows(state, options = {}, run) {
   const st = state.windows || (state.windows = {});
   const now = Date.now();
-  const dynamic = runJson(run, windowsDynamicScript(options.slow !== false)).catch((error) => ({
+  const dynamic = runJson(run, windowsDynamicScript(options.slow !== false && list(st.static?.gpus).length === 1)).catch((error) => ({
     error: String(error && error.message ? error.message : error),
   }));
   let staticTask;
@@ -289,7 +285,7 @@ export async function collectWindows(state, options = {}, run) {
   const [dynamicResult, stat, nvidiaRows] = await Promise.all([dynamic, staticTask, nvidiaTask]);
   const errors = [];
   if (!dynamicResult || dynamicResult.error) {
-    errors.push(dynamicResult?.error || "PowerShell performance probe returned nothing");
+    throw new Error(dynamicResult?.error || "PowerShell performance probe returned nothing");
   }
 
   const perfCpu = dynamicResult?.perfCpu;
@@ -297,7 +293,7 @@ export async function collectWindows(state, options = {}, run) {
   const cpuResult = windowsCpu(perfCpu, stat?.cpu, previousCpu);
   if (perfCpu) st.prevCpu = cpuResult.next;
   const cpu = cpuResult.cpu;
-  cpu.tempC = windowsTemps(stat?.thermal, stat?.lhm);
+  cpu.tempC = windowsTemps(dynamicResult?.lhm);
   if (cpu.usage === null) errors.push("CPU usage needs two samples");
 
   const osRow = first(dynamicResult?.os);
@@ -319,7 +315,8 @@ export async function collectWindows(state, options = {}, run) {
       ram = {
         total: totalBytes,
         used,
-        free: freeBytes,
+        // FreePhysicalMemory is Windows' Available (standby + free).
+        free: num(first(dynamicResult?.mem)?.FreeAndZeroPageListBytes),
         available: freeBytes,
         percent: totalBytes > 0 ? (used / totalBytes) * 100 : null,
         swapTotal,

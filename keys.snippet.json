@@ -5,6 +5,8 @@
     "ctrl-w": "abdh-editor.close",
     "cmd-w": "abdh-editor.close",
     "ctrl-shift-s": "abdh-editor.saveas",
-    "cmd-shift-s": "abdh-editor.saveas"
+    "cmd-shift-s": "abdh-editor.saveas",
+    "ctrl-pagedown": "abdh-editor.next",
+    "ctrl-pageup": "abdh-editor.prev"
   }
 }

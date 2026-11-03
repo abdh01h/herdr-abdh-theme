@@ -150,8 +150,9 @@ function readNet(lines, previous, elapsedMs) {
     const name = fields[0];
     if (!fields[2] || !fields[2].startsWith("<Link")) continue;
     if (!/^(en|utun|bridge|wl|pdp_ip|ipsec)/.test(name)) continue;
-    const rx = Number(fields[6]) || 0;
-    const tx = Number(fields[9]) || 0;
+    // utun/lo rows have no Address column: count from the end.
+    const rx = Number(fields[fields.length - 5]) || 0;
+    const tx = Number(fields[fields.length - 2]) || 0;
     next[name] = { rx, tx };
     totalDown += rx;
     totalUp += tx;

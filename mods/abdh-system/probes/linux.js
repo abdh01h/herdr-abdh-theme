@@ -204,7 +204,8 @@ function readDf(lines) {
     if (!match) continue;
     const source = match[1];
     const mount = match[6];
-    if (skip.test(source)) continue;
+    // Snap packages mount as loop devices that are always 100 % full.
+    if (skip.test(source) || /^\/dev\/loop\d+$/.test(source)) continue;
     if (!source.startsWith("/dev/") && source !== "overlay" && !source.startsWith("/dev")) continue;
     if (seen.has(mount)) continue;
     seen.add(mount);
@@ -285,8 +286,8 @@ function readTemperatures(thermalLines, hwmonLines) {
   const plausible = all.filter((entry) => entry.celsius > 0 && entry.celsius < 150);
   if (plausible.length === 0) return { cpu: null, all };
   const preferred = plausible.filter((entry) => /x86_pkg_temp|coretemp|k10temp|zenpower|cpu|soc|package/i.test(entry.type));
-  const pool = preferred.length > 0 ? preferred : plausible;
-  return { cpu: Math.max(...pool.map((entry) => entry.celsius)), all };
+  // No CPU sensor means no CPU temperature, not the hottest NVMe or Wi-Fi chip.
+  return { cpu: preferred.length > 0 ? Math.max(...preferred.map((entry) => entry.celsius)) : null, all };
 }
 
 function readSysfsGpus(lines) {
@@ -437,7 +438,7 @@ export async function collectLinux(state, options = {}, run) {
     .map((line) => line.split(/\s+/))
     .filter((parts) => parts.length >= 1);
   const battery = batteryRows.length > 0 && num(batteryRows[0][0]) !== null
-    ? { percent: Number(batteryRows[0][0]), charging: /charging|full/i.test(batteryRows[0][1] || "") }
+    ? { percent: Number(batteryRows[0][0]), charging: /^(charging|full)$/i.test(batteryRows[0][1] || "") }
     : null;
 
   return {

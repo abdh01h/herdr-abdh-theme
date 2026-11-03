@@ -1,4 +1,4 @@
-// System: a compact, real-metrics hardware monitor for the abdh layout.
+// System: a compact, real-metrics hardware monitor for the Agentee layout.
 //
 // Everything drawn here comes from platform probes (see probes/). Missing
 // fields say "unavailable"; the first CPU/disk/network sample says
@@ -8,7 +8,7 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { appHome, readTextFile, shared, theme } from "herdr";
+import { appHome, layout, readTextFile, shared, theme } from "herdr";
 import { collect } from "./probe.js";
 import { bytes, clamp, clock, mhz, num, percent, rate, tempC, uptime } from "./format.js";
 
@@ -29,7 +29,25 @@ const SYSTEM_DEFAULTS = {
 function systemSettings(source) {
   const value = source && typeof source === "object" ? source : {};
   const system = value.system && typeof value.system === "object" ? value.system : {};
-  return { ...SYSTEM_DEFAULTS, ...system };
+  // Settings' "Compact spacing" lives under appearance; a system value wins.
+  const appearance = value.appearance && typeof value.appearance === "object" ? value.appearance : {};
+  return { ...SYSTEM_DEFAULTS, compact: appearance.compact ?? SYSTEM_DEFAULTS.compact, ...system };
+}
+
+// Whether this panel's block is on screen: false when its stack shows another
+// child or a column above it is hidden, null when the layout does not hold it
+// (a tab pane or an overlay), which keeps sampling.
+function shownInLayout(node, visible = true) {
+  if (!node || typeof node !== "object") return null;
+  const here = visible && !node.hidden;
+  if (node.content?.mod === "abdh-system") return here;
+  let seen = null;
+  for (const child of node.children || []) {
+    const shown = shownInLayout(child, here && (node.type !== "stack" || !node.active || node.active === child.id));
+    if (shown) return true;
+    if (shown === false) seen = false;
+  }
+  return seen;
 }
 
 function meterColor(t, value) {
@@ -169,11 +187,15 @@ export default class SystemMonitor extends View {
     if (this.paused || this.inFlight) return;
     const settings = this.settings();
     if (!settings.enabled) return;
+    // Hidden copies keep their timers (Herdr keeps a stack's other children
+    // alive), so do not spawn probes nobody is looking at.
+    if (shownInLayout(layout()) === false) return;
     const interval = Math.max(1, num(settings.interval) ?? 2) * 1000;
     // The first samples arrive a second apart so CPU/disk/network deltas exist
     // quickly; after that the configured interval decides.
     const wait = this.hasUsage || this.tick > 3 ? interval : 1000;
-    if (this.lastAt && Date.now() - this.lastAt < wait) return;
+    // lastAt is the start of the last sample; the 1 s tick lands a little late.
+    if (this.lastAt && Date.now() - this.lastAt < wait - 250) return;
     this.sample(cx);
   }
 
@@ -191,7 +213,6 @@ export default class SystemMonitor extends View {
         result = { at: Date.now(), errors: [String(error && error.message ? error.message : error)] };
       }
       this.inFlight = false;
-      this.lastAt = Date.now();
       const usable = Boolean(result && (result.cpu || result.ram || result.disks?.length || result.os));
       if (usable) {
         this.apply(result);

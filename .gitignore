@@ -2,3 +2,6 @@
 abdh-settings.json
 abdh-recovery/
 *.log
+# Written by `herdr-app check` / Herdr into every mod folder
+gpui-kit.d.ts
+jsconfig.json
