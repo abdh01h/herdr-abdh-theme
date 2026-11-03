@@ -36,12 +36,12 @@ export function parseStatus(text) {
     }
     const kind = entry[0];
     if (kind === "?") {
-      entries.push({ path: entry.slice(2), staged: false, unstaged: true, untracked: true, conflict: false });
+      entries.push({ path: entry.slice(2), staged: false, unstaged: true, untracked: true, conflict: false, code: "??" });
       continue;
     }
     if (kind === "u") {
       const parts = entry.split(" ");
-      entries.push({ path: parts.slice(10).join(" "), staged: true, unstaged: true, untracked: false, conflict: true });
+      entries.push({ path: parts.slice(10).join(" "), staged: true, unstaged: true, untracked: false, conflict: true, code: "UU" });
       continue;
     }
     if (kind !== "1" && kind !== "2") continue;
@@ -50,7 +50,7 @@ export function parseStatus(text) {
     const xy = parts[1] ?? "..";
     // A rename would need its original path (kind 2); READ asks for --no-renames,
     // so a stray kind 2 is reported by its new path alone.
-    entries.push({ path, staged: xy[0] !== ".", unstaged: xy[1] !== ".", untracked: false, conflict: false });
+    entries.push({ path, staged: xy[0] !== ".", unstaged: xy[1] !== ".", untracked: false, conflict: false, code: xy });
   }
   const counts = { staged: 0, unstaged: 0, untracked: 0, conflicts: 0 };
   for (const entry of entries) {

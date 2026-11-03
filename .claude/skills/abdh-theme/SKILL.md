@@ -77,6 +77,13 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
   (`probes/windows.js`, `probes/linux.js`, `probes/macos.js`), `abdh-git`,
   `abdh-status`, `abdh-settings` (its own `abdh-settings.json`, paged themes),
   `abdh-menu`.
+- **Git**: `abdh-git` has Changes (per-file Stage/Unstage, Stage all, commit
+  message + Commit, click opens the file), Branches, History, New branch, Merge,
+  and header Fetch/Pull/Push (Push is confirmed and needs an upstream). Commit
+  only writes the index; stage uses `git add -A --`, unstage
+  `git restore --staged --`. The status bar publishes the focused editor file's
+  project root as `shared("abdh.project")`; Files, Git and the home space row use
+  it, so keep that sync when changing any of them.
 
 ## Gotchas that already cost time
 

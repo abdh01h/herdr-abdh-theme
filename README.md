@@ -1,6 +1,6 @@
 # Agentee — a Carbon Herdr layout
 
-A compact, Carbon-inspired Herdr workspace: a left rail for spaces and agents, an icon-tabbed panel on the right (Files, Agents, System), an editor with diff and blame, git branch/merge actions, and a bottom file/git status bar.
+A compact, Carbon-inspired Herdr workspace: a left rail for spaces and agents, an icon-tabbed panel on the right (Files, Agents, System), an editor with diff and blame, git changes/commit/push plus branch/merge actions, and a bottom file/git status bar.
 
 ![Agentee](preview.png)
 
@@ -67,10 +67,10 @@ Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by
 | Part | Behavior |
 |---|---|
 | Left rail | Spaces (machines, worktrees, drag reorder, right-click menus) + agent list, both restyled but behavior-compatible |
-| Top-right icons | Files / Agents / System panel tabs + Git (branches, history, checkout, create, merge) beside the window buttons |
+| Top-right icons | Files / Agents / System panel tabs + Git (Changes: changed files, open, stage, commit, push; branches, history, checkout, create, merge) beside the window buttons |
 | Files (right panel) | Real tree, file-type badges, git status colors, create/rename/delete/copy/paste, context menu, name + content search (git grep / ripgrep) |
 | Editor (mod pane) | Edit and save files, dirty state, external-change reload/overwrite, file tabs, **Diff** (HEAD → buffer), **Blame** (whole file), unsaved-change prompts |
-| Status bar | Folder, branch, ahead/behind, change counts; file language, lines, chars, words, EOL, encoding, save key |
+| Status bar | Folder, branch, ahead/behind, change counts (the open editor file's project root when the editor is focused); file language, lines, chars, words, EOL, encoding, save key |
 | Agents panel | Real agent/token analytics from agent session logs, totals by agent/session/model, history charts |
 | System panel | Real CPU/RAM/GPU/storage/network/battery via OS probes, traffic-light meters, configurable intervals |
 | Settings | `abdh-settings.json`: appearance, tabs, explorer, agents, system, status bar, git; paged theme picker |

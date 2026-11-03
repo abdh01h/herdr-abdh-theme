@@ -14,6 +14,8 @@ function shortPath(p) {
   return parts.slice(-2).join("/");
 }
 
+const dirname = (p) => p.replace(/\\/g, "/").replace(/\/[^/]*$/, "");
+
 // git status --porcelain=v2 --branch -> branch and change counts.
 function parseStatus(out) {
   const g = { branch: null, ahead: 0, behind: 0, modified: 0, added: 0, deleted: 0, staged: 0, conflicted: 0, changes: 0 };
@@ -44,6 +46,8 @@ export default class Status extends View {
     this.git = null;
     this.cwd = undefined;
     this.at = 0;
+    // The open editor file's project root, resolved once per file.
+    this.fileRoot = null;
     // A spawn made from render never runs, so the timer does all the looking:
     // a folder change is read within a second, the same folder every 5 s.
     // shared("abdh.git.changed"): an editor save or a git action, read at once.
@@ -55,21 +59,49 @@ export default class Status extends View {
     });
   }
 
-  // The focused folder; an editor (a mod pane) has none, so fall back to the
-  // tab's terminal, then the space, as the folder label does.
+  // The focused folder. An editor pane shows a file: use that file's project
+  // root so the status bar and Git button follow the project, not the tab's
+  // terminal (often home). Otherwise follow the focused/tab terminal, then the
+  // active space, as the folder label does.
   folder() {
     const f = focused();
+    const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
+    const open = shared("abdh.editor");
+    if (open?.path && pane?.mod === "abdh-editor") {
+      return this.fileRoot?.path === open.path ? this.fileRoot.root : dirname(open.path);
+    }
     return f?.cwd ?? panes().find((p) => p.tab === f?.tab && p.terminal)?.cwd ?? spaces().find((s) => s.active)?.folder ?? null;
   }
 
   look(cx, force = false) {
     if (this.inflight) return;
+    const f = focused();
+    const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
+    const open = shared("abdh.editor");
+    if (!open?.path) {
+      this.fileRoot = null;
+      if (shared("abdh.project")) setShared("abdh.project", null);
+    }
+    if (open?.path && pane?.mod === "abdh-editor" && this.fileRoot?.path !== open.path) {
+      const dir = dirname(open.path), want = open.path, space = f?.space ?? null;
+      const on = (spaces().find((s) => s.id === f?.space) ?? spaces().find((s) => s.active))?.machine ?? undefined;
+      this.fileRoot = { path: want, root: dir, pending: true };
+      cx.spawn(async (cx) => {
+        const r = await exec("git", ["-C", dir, "rev-parse", "--show-toplevel"], { on }).catch(() => null);
+        const top = r && r.code === 0 ? r.stdout.trim().replace(/\\/g, "/") : null;
+        if (this.fileRoot?.path !== want) return;
+        this.fileRoot = { path: want, root: top || dir };
+        setShared("abdh.project", { space, path: want, root: this.fileRoot.root });
+        this.cwd = undefined;
+        this.look(cx, true);
+        cx.notify();
+      });
+    }
     const cwd = this.folder();
     if (!force && cwd === this.cwd) return;
     this.cwd = cwd;
     this.at = Date.now();
     if (!cwd) { this.setGit(null); cx.notify(); return; }
-    const f = focused();
     const on = (spaces().find((s) => s.id === f?.space) ?? spaces().find((s) => s.active))?.machine ?? undefined;
     this.inflight = true;
     cx.spawn(async (cx) => {

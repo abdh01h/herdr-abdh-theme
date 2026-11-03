@@ -14,11 +14,12 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
-import { exec, props, closeOverlay, notify, theme, shared, setShared, focused, spaces, home } from "herdr";
+import { exec, props, closeOverlay, notify, theme, shared, setShared, focused, spaces, home, panes, run } from "herdr";
 import { READ, REF_FORMAT, parseStatus, parseBranches, parseBlame, parseFileBlame, ago, targetOf } from "./git.js";
 
 const MODES = [
   { id: "branches", label: "Branches" },
+  { id: "changes", label: "Changes" },
   { id: "history", label: "History" },
   { id: "create", label: "New branch" },
   { id: "merge", label: "Merge" },
@@ -56,7 +57,8 @@ function refreshSeconds() {
 export default class AbdhGit extends View {
   init(_props, cx) {
     const p = props() ?? {};
-    this.mode = ["create", "merge", "history"].includes(p.action) ? p.action : "branches";
+    this.mode = ["changes", "create", "merge", "history"].includes(p.action) ? p.action : "branches";
+    this.autoMode = !p.action;
     this.wantedBranch = p.branch ?? null;
     this.selected = null;
     // Folded branch sections; remote starts folded, and the choice is kept.
@@ -68,6 +70,7 @@ export default class AbdhGit extends View {
     this.refreshing = false;
     this.loadSeq = 0;
     this.dirty = new Set();
+    this.entries = [];
     this.blameInfo = null;
     this.fileBlame = null;
     this.history = { loading: false, rows: [], error: null };
@@ -91,8 +94,10 @@ export default class AbdhGit extends View {
 
     this.nameInput = InputState.new({ placeholder: "new branch name", value: "" });
     this.sourceInput = InputState.new({ placeholder: "source branch", value: "" });
+    this.commitInput = InputState.new({ placeholder: "commit message", value: "" });
     this.nameValue = "";
     this.sourceValue = "";
+    this.commitValue = "";
     this.checkout = true;
 
     const watch = (key, state) => {
@@ -106,8 +111,10 @@ export default class AbdhGit extends View {
     };
     watch("nameValue", this.nameInput);
     watch("sourceValue", this.sourceInput);
+    watch("commitValue", this.commitInput);
     this.nameInput.on("submit", (_e, cx) => this.askCreate(cx));
     this.sourceInput.on("submit", (_e, cx) => this.askCreate(cx));
+    this.commitInput.on("submit", (_e, cx) => this.commit(cx));
 
     this.handle = cx.focus_handle();
     this.handle.focus();
@@ -209,12 +216,15 @@ export default class AbdhGit extends View {
   // anything that changes the repository.
   async load() {
     const seq = ++this.loadSeq;
+    const auto = this.autoMode;
+    this.autoMode = false;
     this.lastRefreshAt = Date.now();
     const folder = this.folder();
     const top = await runGit(folder, ["rev-parse", "--show-toplevel"]);
     if (!top.ok) {
       if (seq === this.loadSeq) {
         this.dirty = new Set();
+        this.entries = [];
         this.state = {
           ...this.state,
           loading: false,
@@ -283,6 +293,9 @@ export default class AbdhGit extends View {
     }
 
     this.dirty = new Set(entries.map((e) => e.path));
+    this.entries = entries;
+    // Opened from the Git button: start on Changes when there is work to see.
+    if (auto && entries.length) this.mode = "changes";
     this.state = {
       loading: false,
       root,
@@ -380,6 +393,7 @@ export default class AbdhGit extends View {
     this.confirm = null;
     this.notice = "";
     if (id === "history") this.loadHistory(cx);
+    if (id === "changes") this.refresh(cx);
     if (id === "create") {
       if (!this.sourceValue) {
         const source = this.state.branch || "HEAD";
@@ -509,6 +523,143 @@ export default class AbdhGit extends View {
     cx.notify();
   }
 
+  askPush(cx) {
+    const st = this.state;
+    if (!st.root) return;
+    if (st.detached) {
+      this.notice = "Detached HEAD: check out a branch before pushing.";
+      cx.notify();
+      return;
+    }
+    if (!st.branch) {
+      this.notice = "The current branch is unknown; push is unavailable.";
+      cx.notify();
+      return;
+    }
+    if (!st.upstream) {
+      this.notice = `${st.branch} has no upstream to push to.`;
+      cx.notify();
+      return;
+    }
+    this.notice = "";
+    this.confirm = { kind: "push", branch: st.branch, upstream: st.upstream, ahead: st.ahead ?? 0 };
+    cx.notify();
+  }
+
+  // -- changes ---------------------------------------------------------------
+  codeOf(entry) {
+    if (entry.conflict) return "!";
+    const code = String(entry.code ?? "");
+    if (entry.untracked) return "A";
+    if (entry.staged && entry.unstaged) return code[0] && code[1] ? `${code[0]}${code[1]}` : "M";
+    if (entry.staged) return code[0] || "S";
+    return code[1] || "M";
+  }
+
+  changedPath(entry) {
+    const root = String(this.state.root ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
+    return `${root}/${entry.path}`;
+  }
+
+  // Opening a changed file retires the dialog, so the editor is not covered.
+  openChanged(entry, cx) {
+    const root = this.state.root;
+    if (!root || this.busy) return;
+    if (this.codeOf(entry).includes("D")) {
+      this.notice = `${entry.path} was deleted; there is no file to open.`;
+      cx.notify();
+      return;
+    }
+    const path = this.changedPath(entry);
+    const tab = focused()?.tab ?? null;
+    const pane = panes().find((p) => p.mod === "abdh-editor" && p.tab === tab);
+    if (pane) {
+      setShared("abdh.open", { path, root, on: null, tab, nonce: `${Date.now()}-${Math.random()}` });
+      run("pane.focus", { pane: pane.pane });
+    } else {
+      run("pane.split", { direction: "right", mod: "abdh-editor", props: { path, root, on: null } });
+    }
+    this.dismiss();
+  }
+
+  stage(entry, cx) {
+    const root = this.state.root;
+    if (!root || this.busy) return;
+    this.busy = true;
+    this.notice = "";
+    cx.notify();
+    cx.spawn(async (cx) => {
+      let r = await runGit(root, entry.staged ? ["restore", "--staged", "--", entry.path] : ["add", "-A", "--", entry.path]);
+      // An unborn branch has no HEAD for restore; drop the index entry instead.
+      if (!r.ok && entry.staged && /HEAD|could not resolve/i.test(r.err)) {
+        r = await runGit(root, ["rm", "--cached", "--", entry.path]);
+      }
+      this.busy = false;
+      if (!r.ok) {
+        this.notice = (r.err || r.out || "git index update failed.").trim();
+        notify({ title: entry.staged ? "Unstage failed" : "Stage failed", body: firstLine(this.notice), level: "error" });
+      }
+      await this.load();
+      setShared("abdh.git.changed", Date.now());
+      cx.notify();
+    });
+  }
+
+  stageAll(cx) {
+    const root = this.state.root;
+    if (!root || this.busy) return;
+    this.busy = true;
+    this.notice = "";
+    cx.notify();
+    cx.spawn(async (cx) => {
+      const r = await runGit(root, ["add", "-A"]);
+      this.busy = false;
+      if (!r.ok) {
+        this.notice = (r.err || r.out || "git add failed.").trim();
+        notify({ title: "Stage failed", body: firstLine(this.notice), level: "error" });
+      }
+      await this.load();
+      setShared("abdh.git.changed", Date.now());
+      cx.notify();
+    });
+  }
+
+  commit(cx) {
+    const root = this.state.root;
+    if (!root || this.busy) return;
+    const message = this.commitValue.trim();
+    if (!message) {
+      this.notice = "Type a commit message.";
+      this.commitInput.focus();
+      cx.notify();
+      return;
+    }
+    const staged = (this.entries ?? []).filter((e) => e.staged).length;
+    if (!staged) {
+      this.notice = (this.entries ?? []).length ? "Stage the files to commit first." : "No changes to commit.";
+      cx.notify();
+      return;
+    }
+    this.busy = true;
+    this.notice = "";
+    cx.notify();
+    cx.spawn(async (cx) => {
+      const r = await runGit(root, ["commit", "-m", message]);
+      this.busy = false;
+      if (r.ok) {
+        this.commitValue = "";
+        this.commitInput.set_value("");
+        notify({ title: "Committed", body: firstLine(r.out) || message, level: "success", timeout: 3000 });
+      } else {
+        this.notice = (r.err || r.out || "git commit failed.").trim();
+        notify({ title: "Commit failed", body: firstLine(this.notice), level: "error" });
+      }
+      await this.load();
+      setShared("abdh.git.changed", Date.now());
+      cx.notify();
+    });
+  }
+
   askDelete(cx) {
     const st = this.state;
     const sel = this.selected;
@@ -526,6 +677,7 @@ export default class AbdhGit extends View {
   describe(c) {
     if (c.kind === "delete") return `Delete ${c.remote ? "remote" : "local"} branch ${c.branch}?`;
     if (c.kind === "pull") return `Pull ${c.upstream} into ${c.branch}? (fast-forward only)`;
+    if (c.kind === "push") return `Push ${c.branch} to ${c.upstream}${c.ahead > 0 ? ` (${plural(c.ahead, "commit")})` : ""}?`;
     if (c.kind === "checkout") return `Check out ${c.branch}${c.track ? " (new tracking branch)" : ""}?`;
     if (c.kind === "create") return `Create ${c.branch} from ${c.source}${c.checkout ? ", then check it out" : ""}?`;
     return `Merge ${c.branch} into ${c.current}?`;
@@ -580,6 +732,7 @@ export default class AbdhGit extends View {
     if (c.kind === "merge") return this.opMerge(c);
     if (c.kind === "delete") return this.opDelete(c);
     if (c.kind === "pull") return this.opPull(c);
+    if (c.kind === "push") return this.opPush(c);
     return { ok: false, title: "Unknown action", message: "Nothing ran." };
   }
 
@@ -600,6 +753,21 @@ export default class AbdhGit extends View {
     const fresh2 = await this.freshStatus(root);
     const pulled = fresh && fresh2 && fresh.branch.oid !== fresh2.branch.oid;
     return { ok: true, title: "Pulled", message: pulled ? `${c.upstream} into ${c.branch}.` : `${c.branch} is already up to date.` };
+  }
+
+  async opPush(c) {
+    const root = this.state.root;
+    const fresh = await this.freshStatus(root);
+    if (fresh && fresh.branch.head !== c.branch) {
+      return { ok: false, title: "Push stopped", message: `HEAD is now ${fresh.branch.head ?? "detached"}, not ${c.branch}. Nothing was pushed.` };
+    }
+    const r = await runGit(root, ["push"]);
+    if (!r.ok) {
+      const diverged = fresh && fresh.branch.ahead > 0 && fresh.branch.behind > 0;
+      const why = (r.err || r.out || "git push failed.").trim();
+      return { ok: false, title: "Push failed", message: diverged ? `${c.branch} and ${c.upstream} have diverged; pull or merge first. ${why}` : why };
+    }
+    return { ok: true, title: "Pushed", message: `${c.branch} to ${c.upstream}.` };
   }
 
   async opDelete(c) {
@@ -911,6 +1079,91 @@ export default class AbdhGit extends View {
       .child(Scrollbar.vertical("abdh-git-list").absolute().inset_0());
   }
 
+  changesBody(t, cx) {
+    const st = this.state;
+    if (!st.root) return this.notRepo(t, st);
+    const entries = this.entries ?? [];
+    const staged = entries.filter((e) => e.staged).length;
+    const field = Input.new(this.commitInput)
+      .h(28)
+      .w_full()
+      .px(9)
+      .items_center()
+      .rounded(5)
+      .border_1()
+      .border_color(this.focused.has("commitValue") ? t.accent : t.input)
+      .bg(t.background)
+      .text_color(t.foreground);
+    const row = (e, i) => {
+      const code = this.codeOf(e);
+      const color = e.conflict ? t.blocked : code.includes("D") ? t.blocked : code.includes("A") ? t.done : t.ansi3;
+      return h_flex()
+        .id(`gch-${i}`)
+        .h(27)
+        .flex_none()
+        .px(12)
+        .gap(8)
+        .items_center()
+        .cursor_pointer()
+        .hover((s) => s.bg(t.hover))
+        .on_click((_e, cx) => this.openChanged(e, cx))
+        .child(div().w(22).flex_none().text_size(10).font_semibold().text_color(color).child(code))
+        .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.foreground).tooltip(this.changedPath(e)).child(e.path))
+        .child(
+          div()
+            .id(`gch-stage-${i}`)
+            .h(20)
+            .px(6)
+            .flex_none()
+            .flex()
+            .items_center()
+            .rounded(4)
+            .text_size(9.5)
+            .text_color(t.dim)
+            .cursor_pointer()
+            .hover((s) => s.bg(t.raised).text_color(t.foreground))
+            .on_click((_e, cx) => {
+              cx.stop_propagation();
+              this.stage(e, cx);
+            })
+            .child(e.staged ? "Unstage" : "Stage"),
+        );
+    };
+    return v_flex()
+      .flex_1()
+      .min_h(0)
+      .child(
+        h_flex()
+          .h(24)
+          .flex_none()
+          .px(12)
+          .gap(8)
+          .items_center()
+          .border_b(1)
+          .border_color(t.border)
+          .child(div().text_size(9.5).font_semibold().text_color(t.dim).child(`CHANGES · ${entries.length}`))
+          .child(div().flex_1())
+          .child(div().text_size(9.5).text_color(t.dim).child(`${staged} staged`)),
+      )
+      .child(
+        entries.length
+          ? v_flex().id("abdh-git-changes").flex_1().min_h(0).overflow_y_scrollbar().gap(1).children(entries.map(row))
+          : div().flex_1().min_h(0).p(12).text_size(11).text_color(t.dim).child("No changes"),
+      )
+      .child(
+        h_flex()
+          .flex_none()
+          .px(12)
+          .py(8)
+          .gap(8)
+          .items_center()
+          .border_t(1)
+          .border_color(t.border)
+          .child(div().flex_1().min_w(0).child(field))
+          .child(div().text_size(9.5).text_color(t.dim).child("↵ commits")),
+      );
+  }
+
   createForm(t) {
     const field = (key, state) =>
       Input.new(state)
@@ -1109,7 +1362,9 @@ export default class AbdhGit extends View {
       .when(Boolean(st.root), (el) => el
         .child(headerButton("abdh-git-fetch", this.fetching ? "Fetching…" : "Fetch", "git fetch --all --prune", (c) => this.fetch(c)))
         .child(headerButton("abdh-git-pull", st.behind > 0 ? `Pull ↓${st.behind}` : "Pull",
-          st.upstream ? `git pull --ff-only from ${st.upstream}` : "No upstream to pull from", (c) => this.askPull(c))))
+          st.upstream ? `git pull --ff-only from ${st.upstream}` : "No upstream to pull from", (c) => this.askPull(c)))
+        .child(headerButton("abdh-git-push", st.ahead > 0 ? `Push ↑${st.ahead}` : "Push",
+          st.upstream ? `git push to ${st.upstream}` : "No upstream to push to", (c) => this.askPush(c))))
       .child(
         div()
           .id("abdh-git-refresh")
@@ -1176,7 +1431,8 @@ export default class AbdhGit extends View {
       .when(Boolean(this.notice), (el) => el.child(notice))
       .when(this.mode === "create", (el) => el.child(this.createForm(t)).child(this.listBody(t, cx)))
       .when(this.mode === "history", (el) => el.child(this.historyBody(t)))
-      .when(this.mode !== "create" && this.mode !== "history", (el) => el.child(this.listBody(t, cx)));
+      .when(this.mode === "changes", (el) => el.child(this.changesBody(t, cx)))
+      .when(this.mode !== "create" && this.mode !== "history" && this.mode !== "changes", (el) => el.child(this.listBody(t, cx)));
 
     // Bottom: the confirm step takes over from the normal action bar.
     const confirmBar = () =>
@@ -1201,6 +1457,11 @@ export default class AbdhGit extends View {
 
     const actionHint = (() => {
       if (this.mode === "history") return `${this.history.rows.length} commits \u00b7 read-only`;
+      if (this.mode === "changes") {
+        const n = (this.entries ?? []).length;
+        const staged = (this.entries ?? []).filter((e) => e.staged).length;
+        return n ? `${n} changed \u00b7 ${staged} staged` : "No changes";
+      }
       if (this.mode === "create") return `From ${this.sourceValue || st.branch || "HEAD"}`;
       if (this.mode === "merge") {
         if (!this.selected) return "Select a branch to merge";
@@ -1221,6 +1482,9 @@ export default class AbdhGit extends View {
       .bg(t.surface)
       .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(t.muted).child(actionHint))
       .when(this.mode === "create", (el) => el.child(this.button(t, "abdh-git-create", "Create branch", true, (c) => this.askCreate(c))))
+      .when(this.mode === "changes", (el) => el
+        .child(this.button(t, "abdh-git-stage-all", "Stage all", false, (c) => this.stageAll(c)))
+        .child(this.button(t, "abdh-git-commit", "Commit", true, (c) => this.commit(c))))
       .when(
         this.mode === "merge" && Boolean(this.selected) && !(this.selected.kind === "local" && this.selected.name === st.branch),
         (el) => el.child(this.button(t, "abdh-git-merge", "Merge", true, (c) => this.askMerge(c))),
@@ -1286,7 +1550,7 @@ export default class AbdhGit extends View {
         div()
           .text_size(9.5)
           .text_color(t.dim)
-          .child(this.mode === "history" ? `esc close \u00b7 refresh ${secs}s` : `\u2191\u2193 select \u00b7 \u21b5 act \u00b7 esc close \u00b7 refresh ${secs}s`),
+          .child(this.mode === "history" ? `esc close \u00b7 refresh ${secs}s` : this.mode === "changes" ? `click a file to open \u00b7 enter commits \u00b7 esc close \u00b7 refresh ${secs}s` : `\u2191\u2193 select \u00b7 \u21b5 act \u00b7 esc close \u00b7 refresh ${secs}s`),
       );
 
     return v_flex()
@@ -1323,6 +1587,13 @@ export default class AbdhGit extends View {
     }
     if (this.mode === "history") return;
     if (this.focused.size > 0) return;
+    if (this.mode === "changes") {
+      if (e.key === "enter") {
+        this.commit(cx);
+        cx.stop_propagation();
+      }
+      return;
+    }
     if (e.key === "down" || e.key === "up") {
       this.moveSelection(e.key === "down" ? 1 : -1);
       cx.stop_propagation();

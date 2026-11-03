@@ -146,10 +146,14 @@ export default class Tabs extends View {
         run("layout.select", { stack: "panel-body", child: id });
       })
       .child(svg(`mods/abdh-tabs/icons/${icon}.svg`).size(15));
-    const projectRoot = focused()?.cwd ?? spaces().find((s) => s.active)?.folder ?? home();
+    const f = focused();
+    // The status bar resolves the open editor file's project root; use the same
+    // root for the overlay, so Git opens the repository Files shows.
+    const g = shared("abdh.git.status");
+    const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
+    const projectRoot = (pane?.mod === "abdh-editor" ? g?.cwd : null) ?? f?.cwd ?? spaces().find((s) => s.active)?.folder ?? home();
     // What the status bar's git read says is waiting here: a dot on the Git
     // button (conflicts or something to pull: red, changes: amber, to push: green).
-    const g = shared("abdh.git.status");
     const waiting = g ? [
       g.conflicted > 0 ? `${g.conflicted} conflict${g.conflicted === 1 ? "" : "s"}` : null,
       g.changes > 0 ? `${g.changes} change${g.changes === 1 ? "" : "s"} to commit` : null,
