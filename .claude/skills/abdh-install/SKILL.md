@@ -1,6 +1,6 @@
 ---
 name: abdh-install
-description: Install or update the Agentee Herdr layout/theme on this machine from github.com/abdh01h/herdr-abdh-theme. Use when the person says install Agentee (formerly abdh), set up the Agentee theme/layout, update their Herdr theme, or asks what to run to get it.
+description: Install or update the Agentee Herdr layout/theme on this machine from github.com/abdh01h/herdr-agentee-theme. Use when the person says install Agentee (formerly abdh), set up the Agentee theme/layout, update their Herdr theme, or asks what to run to get it.
 ---
 
 # Install Agentee for Herdr
@@ -9,7 +9,7 @@ Goal: install the Agentee layout, theme and mods into this machine's Herdr home,
 verify them, and switch the layout. Report what changed.
 
 Read the full brief when in doubt:
-https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/AGENT_INSTALL.md
+https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/AGENT_INSTALL.md
 
 ## Steps
 
@@ -19,12 +19,12 @@ https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/AGENT_INSTALL.md
 
    Windows:
    ```powershell
-   powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.ps1 | iex"
+   powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.ps1 | iex"
    ```
 
    macOS / Linux:
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.sh | sh
    ```
 
    It backs up replacements (`*.bak-<timestamp>`), installs `themes/agentee.json`,

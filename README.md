@@ -15,13 +15,13 @@ Built for [Herdr](https://herdr.dev) 0.1.12. Tested on Windows 11; the system pr
 Windows (PowerShell):
 
 ```powershell
-powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.ps1 | iex"
+powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.ps1 | iex"
 ```
 
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.sh | sh
 ```
 
 The installer downloads this repository, backs up every file or folder it replaces
@@ -39,7 +39,7 @@ Options: `-HerdrHome <path>` / `HERDR_APP_HOME`, `-Branch <name>` / `BRANCH`,
 
 Point any coding agent at the repository and say:
 
-> Install the Agentee Herdr theme from https://github.com/abdh01h/herdr-abdh-theme —
+> Install the Agentee Herdr theme from https://github.com/abdh01h/herdr-agentee-theme —
 > read `AGENT_INSTALL.md` and do it end to end, then switch the layout and show
 > me the check/status output.
 

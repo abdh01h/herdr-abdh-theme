@@ -1,7 +1,7 @@
 #!/bin/sh
 # Agentee — one-command install for macOS and Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.sh | sh
 #
 # Options via environment:
 #   HERDR_APP_HOME=/path BRANCH=main NO_LAYOUT=1 sh install.sh
@@ -13,7 +13,7 @@
 
 set -eu
 
-REPO="${REPO:-abdh01h/herdr-abdh-theme}"
+REPO="${REPO:-abdh01h/herdr-agentee-theme}"
 BRANCH="${BRANCH:-main}"
 HOME_DIR="${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}"
 STAMP="$(date +%Y%m%d-%H%M%S)"

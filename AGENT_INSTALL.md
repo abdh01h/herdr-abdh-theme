@@ -4,7 +4,7 @@ You are installing the **Agentee** layout/theme for Herdr on the person's machin
 Do it end to end, then report exactly what changed. Do not rewrite unrelated
 Herdr settings or delete anything you did not create.
 
-Repository: https://github.com/abdh01h/herdr-abdh-theme
+Repository: https://github.com/abdh01h/herdr-agentee-theme
 Herdr home: `$HERDR_APP_HOME`, else `$XDG_CONFIG_HOME/herdr-app`, else
 `~/.config/herdr-app` (on Windows that is `C:\Users\<name>\.config\herdr-app`).
 
@@ -13,13 +13,13 @@ Herdr home: `$HERDR_APP_HOME`, else `$XDG_CONFIG_HOME/herdr-app`, else
 Windows (PowerShell 5.1+):
 
 ```powershell
-powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.ps1 | iex"
+powershell -NoProfile -Command "irm https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.ps1 | iex"
 ```
 
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.sh | sh
 ```
 
 The installer downloads the repository, backs up what it replaces as

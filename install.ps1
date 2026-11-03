@@ -1,6 +1,6 @@
 # Agentee - one-command install for Windows.
 #
-#   irm https://raw.githubusercontent.com/abdh01h/herdr-abdh-theme/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/install.ps1 | iex
 #
 # Or with options:
 #   ./install.ps1 -HerdrHome "D:\herdr" -Branch main -NoLayout
@@ -12,7 +12,7 @@
 
 param(
   [Alias("Home")][string]$HerdrHome = "",
-  [string]$Repo = "abdh01h/herdr-abdh-theme",
+  [string]$Repo = "abdh01h/herdr-agentee-theme",
   [string]$Branch = "main",
   [switch]$NoLayout
 )

@@ -182,7 +182,7 @@ const SECTIONS = [
   {
     id: "updates",
     label: "Updates",
-    note: "Check github.com/abdh01h/herdr-abdh-theme for a newer Agentee and install it here. Your settings and keys are kept.",
+    note: "Check github.com/abdh01h/herdr-agentee-theme for a newer Agentee and install it here. Your settings and keys are kept.",
     rows: [
       { group: "updates", key: "checkOnOpen", kind: "toggle", label: "Check when opened", help: "Look for a newer version each time this panel opens." },
     ],

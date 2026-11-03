@@ -13,7 +13,7 @@
 // it only touches the app folder. `exec`, `fs` and the folders are injected so
 // the logic also runs under plain Node in a test harness.
 
-export const REPO = "abdh01h/herdr-abdh-theme";
+export const REPO = "abdh01h/herdr-agentee-theme";
 export const BRANCH = "main";
 export const SITE = `https://github.com/${REPO}`;
 const ARCHIVE = `https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}`;
