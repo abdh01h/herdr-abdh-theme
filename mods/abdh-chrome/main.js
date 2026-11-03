@@ -54,17 +54,29 @@ export default class Chrome extends View {
         const base = cx.theme();
         const app = theme();
         if (!base?.colors) return;
-        const key = JSON.stringify([base.appearance, base.colors, app.accent, app.selection]);
+        const key = JSON.stringify([base.appearance, base.colors, app.accent, app.selection, app.background, app.foreground, app.dim]);
         if (key === synced) return;
         // The editor paints an unset selection with Base's *accent* at 40%.
         // The app maps accent from the theme's hover (near the background), so
         // the highlight disappeared. Point accent at the theme accent and set
         // selection to the theme's own selection colour. The editor's indent
         // guides are Base `border`; a clear border removes them.
-        const colors = { ...base.colors, accent: app.accent, selection: app.selection || app.accent, border: "#00000000" };
+        // The editor paints its line-number gutter with Base `surface`. A light
+        // Base palette leaves a white strip beside dark code, so pin the tokens
+        // the editor falls back to onto the theme's own dark colours too.
+        const colors = {
+          ...base.colors,
+          accent: app.accent,
+          selection: app.selection || app.accent,
+          border: "#00000000",
+          surface: app.background,
+          background: app.background,
+          foreground: app.foreground,
+          muted_foreground: app.dim,
+        };
         set_theme({ appearance: base.appearance, tokens: { colors, spacing: base.spacing, radius: base.radius } });
         const after = cx.theme();
-        synced = JSON.stringify([after.appearance, after.colors, app.accent, app.selection]);
+        synced = JSON.stringify([after.appearance, after.colors, app.accent, app.selection, app.background, app.foreground, app.dim]);
       } catch { /* older host without set_theme */ }
     };
     cx.timer.every(1000, (timerCx) => syncBase(timerCx));

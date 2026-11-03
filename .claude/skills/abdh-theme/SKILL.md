@@ -65,6 +65,10 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
   (use `cx.theme().colors`, not `.tokens`). Keep that sync or selection becomes
   invisible. Colours read from `cx.theme().colors` lose their alpha, so the sync
   takes them from `theme()`; it also clears Base `border` to hide indent guides.
+- **Editor gutter**: the line-number column is painted with Base `surface`; a
+  light Base palette leaves a white strip beside dark code. `abdh-chrome` pins
+  Base `surface`, `background`, `foreground` and `muted_foreground` from the
+  running theme. Keep those pins when changing the sync.
 - **Event handlers**: use the handler's own `cx`, never `render`'s (stale after
   render returns: clicks change state but never redraw).
 - **Panels**: `abdh-agents` (`main.js` + `tokens.mjs`, tokens from agent session logs), `abdh-system`
