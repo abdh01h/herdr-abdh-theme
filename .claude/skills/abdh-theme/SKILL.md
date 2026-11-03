@@ -81,9 +81,12 @@ are rewritten too; `abdh-spaces` and `abdh-agents-list` are the editable forks.
   message + Commit, click opens the file), Branches, History, New branch, Merge,
   and header Fetch/Pull/Push (Push is confirmed and needs an upstream). Commit
   only writes the index; stage uses `git add -A --`, unstage
-  `git restore --staged --`. The status bar publishes the focused editor file's
-  project root as `shared("abdh.project")`; Files, Git and the home space row use
-  it, so keep that sync when changing any of them.
+  `git restore --staged --`. Theme settings → Git → Open as a tab
+  (`abdh.settings.git.openInTab`, off by default) makes the Git button focus or
+  create a Git tab in the active space instead of the dialog; the tab's X/Esc
+  closes its pane. The status bar publishes the focused editor file's project
+  root as `shared("abdh.project")`; Files, Git and the home space row use it, so
+  keep that sync when changing any of them.
 
 ## Gotchas that already cost time
 

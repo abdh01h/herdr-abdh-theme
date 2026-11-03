@@ -63,7 +63,7 @@ const EXTRA_DEFAULTS = {
     gitChanges: true,
     gitBlame: false,
   },
-  git: { ...CONTRACT_DEFAULTS.git, confirmMerge: true, conflictNotices: true },
+  git: { ...CONTRACT_DEFAULTS.git, confirmMerge: true, conflictNotices: true, openInTab: false },
 };
 
 const DEFAULTS = {
@@ -165,8 +165,9 @@ const SECTIONS = [
   {
     id: "git",
     label: "Git",
-    note: "The git overlay's refresh and notices.",
+    note: "How Git opens, its refresh, and notices.",
     rows: [
+      { group: "git", key: "openInTab", kind: "toggle", label: "Open as a tab", help: "Off: a popup over the work area. On: a Git tab in the active space." },
       { group: "git", key: "refresh", kind: "number", label: "Refresh interval", help: "Seconds between status reads." },
       { group: "git", key: "conflictNotices", kind: "toggle", label: "Conflict notices", help: "Notify when a merge stops on conflicts." },
     ],

@@ -143,15 +143,23 @@ export default class AbdhGit extends View {
     else if (p.file) this.loadFileBlame(cx);
   }
 
-  // The folder git runs in: props().root, else the live focused pane, else the
-  // first space, else home.
+  // The folder git runs in: props().root, else the open project (a Git tab
+  // follows the editor's project), else the focused/tab terminal, else the
+  // active space, else home.
   folder() {
     const p = props() ?? {};
     if (p.root) return p.root;
     const f = focused();
-    if (f?.cwd) return f.cwd;
-    const all = spaces();
-    return all[0]?.folder || home();
+    const pane = f?.pane ? panes().find((x) => x.pane === f.pane) : null;
+    const space = spaces().find((s) => s.active);
+    const project = shared("abdh.project");
+    const here = project?.root && (!project.space || project.space === space?.id);
+    if (pane?.mod === "abdh-git" && here) return project.root;
+    if (f?.cwd && !pane?.mod) return f.cwd;
+    if (here) return project.root;
+    const tabs = new Set((space?.tabs ?? []).map((t) => t.id));
+    const terminal = panes().find((x) => tabs.has(x.tab) && x.terminal && x.cwd);
+    return terminal?.cwd || space?.folder || spaces()[0]?.folder || home();
   }
 
   loadHistory(cx) {
@@ -381,10 +389,13 @@ export default class AbdhGit extends View {
   }
 
   // Not named close(): that is the View lifecycle hook, called when the
-  // overlay is already going away.
+  // overlay is already going away. A Git tab has no overlay: close its pane.
   dismiss() {
     const id = props()?.overlay;
-    if (id) closeOverlay(id);
+    if (id) { closeOverlay(id); return; }
+    const tab = focused()?.tab;
+    const pane = panes().find((x) => x.mod === "abdh-git" && x.tab === tab);
+    if (pane) run("pane.close", { pane: pane.pane });
   }
 
   setMode(id, cx) {

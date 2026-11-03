@@ -162,6 +162,23 @@ export default class Tabs extends View {
     ].filter(Boolean) : [];
     const gitDot = !g ? null : g.conflicted > 0 || g.behind > 0 ? t.blocked : g.changes > 0 ? t.ansi3 : g.ahead > 0 ? t.done : null;
     const gitTip = g ? `Git · ${g.branch ?? "detached"}${waiting.length ? `\n${waiting.join(" · ")}` : " · nothing to commit, push or pull"}` : "Git branches";
+    // Theme settings → Git → Open as a tab: focus or make a Git tab in this
+    // space; otherwise open the dialog over the work area.
+    const openGit = () => {
+      if (shared("abdh.settings")?.git?.openInTab === true) {
+        const active = spaces().find((s) => s.active);
+        const tabs = new Set((active?.tabs ?? []).map((t) => t.id));
+        const pane = panes().find((p) => p.mod === "abdh-git" && tabs.has(p.tab));
+        if (pane) {
+          run("tab.select", { id: pane.tab });
+          run("pane.focus", { pane: pane.pane });
+          return;
+        }
+        run("tab.new", { name: "Git", mod: "abdh-git" });
+        return;
+      }
+      openOverlay({ mod: "abdh-git", kind: "dialog", width: 520, height: 520, props: { root: projectRoot } });
+    };
     const lightsPadding = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && root?.traffic_lights
       ? Math.max(10, (root.traffic_lights[0] + 64) / (settings().zoom ?? 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 10;
@@ -176,7 +193,7 @@ export default class Tabs extends View {
         .child(panelButton("panel-system", "cpu", "System"))
         .child(div().id("top-git").size(26).flex_none().flex().items_center().justify_center().rounded(6).relative()
           .text_color(t.dim).cursor_pointer().hover((x) => x.bg(t.hover).text_color(t.foreground)).tooltip(gitTip)
-          .on_mouse_down("left", stop).on_click(() => openOverlay({ mod: "abdh-git", kind: "dialog", width: 520, height: 520, props: { root: projectRoot } }))
+          .on_mouse_down("left", stop).on_click(() => openGit())
           .child(svg("mods/abdh-tabs/icons/branch.svg").size(15))
           .when(Boolean(gitDot), (el) => el.child(div().absolute().top(3).right(3).size(7).rounded_full().bg(gitDot).border_1().border_color(t.chrome)))))
       .when(w?.buttons, el => el.child(h_flex().h(31).items_center().gap(2)
