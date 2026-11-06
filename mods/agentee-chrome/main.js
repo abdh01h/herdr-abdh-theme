@@ -84,12 +84,12 @@ export default class Chrome extends View {
     // The theme's own settings file, so panels follow it before Settings is opened.
     cx.spawn(async (cx) => {
       try {
-        const text = await readTextFile(`${appHome()}/abdh-settings.json`);
+        const text = await readTextFile(`${appHome()}/agentee-settings.json`);
         if (!text) return;
         const stored = JSON.parse(text);
-        const base = shared("abdh.settings") ?? {};
+        const base = shared("agentee.settings") ?? {};
         // The file wins: a hand edit takes effect at the next start.
-        setShared("abdh.settings", { ...base, ...stored });
+        setShared("agentee.settings", { ...base, ...stored });
       } catch { /* an unreadable file means defaults */ }
     });
   }
@@ -99,19 +99,19 @@ export default class Chrome extends View {
       .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
       .cursor_pointer().on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_click(action).when(Boolean(tip), (el) => el.tooltip(tip))
-      .child(svg(`mods/abdh-chrome/icons/${icon}.svg`).size(15));
+      .child(svg(`mods/agentee-chrome/icons/${icon}.svg`).size(15));
   }
 
   render() {
     const t = theme();
     if (props()?.role === "footer") {
       // One row of tools; a collapsed rail only has room for Theme settings.
-      const abdhSettings = this.button(t, "settings", "sliders", () =>
-        openOverlay({ mod: "abdh-settings", kind: "dialog", width: 780, height: 620 }), "Theme settings");
+      const agenteeSettings = this.button(t, "settings", "sliders", () =>
+        openOverlay({ mod: "agentee-settings", kind: "dialog", width: 780, height: 620 }), "Theme settings");
       return h_flex().size_full().bg(t.chrome).border_t(1).border_color(t.border).px(8).gap(2).items_center()
-        .when(narrow(), (el) => el.justify_center().child(abdhSettings))
+        .when(narrow(), (el) => el.justify_center().child(agenteeSettings))
         .when(!narrow(), (el) => el
-          .child(abdhSettings)
+          .child(agenteeSettings)
           .child(this.button(t, "herdr-settings", "settings", () => run("app.settings"),
             `Herdr settings${keyFor("app.settings") ? "  " + keyFor("app.settings") : ""}`))
           .child(this.button(t, "add-machine", "server", () => run("mod.open", { name: "machine-add" }), "Add machine"))
@@ -121,7 +121,7 @@ export default class Chrome extends View {
     }
     const lights = window()?.platform === "macos" && window()?.titlebar === "none" && !window()?.fullscreen;
     return h_flex().size_full().bg(t.chrome).pl(lights && !narrow() ? 76 : 12).pr(8).gap(2).items_center()
-      .child(h_flex().id("abdh-brand").flex_1().min_w(0).gap(7).items_center()
+      .child(h_flex().id("agentee-brand").flex_1().min_w(0).gap(7).items_center()
         .child(div().size(7).rounded(2).bg(t.accent))
         .when(!narrow(), (el) => el.child(div().font_semibold().text_size(13).text_color(t.foreground).child("Agentee"))))
       .when(!narrow(), (el) => el.child(this.button(t, "search", "search", () => run("mod.open", { name: "picker" }), "Find a command or file")))

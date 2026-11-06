@@ -45,7 +45,7 @@ export default class Tabs extends View {
     const root = layout(), panel = find(root, "panel"), stack = find(root, "panel-body");
     if (!id || !panel) return;
     const now = { shown: !panel.hidden, active: stack?.active ?? "panel-files" };
-    const saved = shared("abdh.panel.bySpace");
+    const saved = shared("agentee.panel.bySpace");
     const bySpace = saved && typeof saved === "object" ? { ...saved } : {};
     if (id !== this.space) {
       const first = this.space === undefined;
@@ -67,7 +67,7 @@ export default class Tabs extends View {
     bySpace[id] = state;
     // Closed spaces go with the next change.
     for (const key of Object.keys(bySpace)) if (!sp.some((s) => s.id === key)) delete bySpace[key];
-    setShared("abdh.panel.bySpace", bySpace);
+    setShared("agentee.panel.bySpace", bySpace);
   }
 
   nameOf(tab) {
@@ -79,7 +79,7 @@ export default class Tabs extends View {
 
   render() {
     const t = theme();
-    const ui = shared("abdh.settings")?.tabs ?? {};
+    const ui = shared("agentee.settings")?.tabs ?? {};
     const minW = ui.minWidth ?? 60, maxW = Math.max(minW, ui.maxWidth ?? 200);
     const space = spaces().find(s => s.active);
     const shown = space?.tabs ?? [];
@@ -130,7 +130,7 @@ export default class Tabs extends View {
           .child(div().id(`close-${tab.id}`).size(16).flex_none().flex().items_center().justify_center().rounded(3)
             .when(on || hot || ui.closeOnHover === false, el => el.text_color(t.dim).hover(s => s.bg(t.raised).text_color(t.foreground))
               .on_mouse_down("left", stop).on_click((_e, cx) => { cx.stop_propagation(); run("tab.close", { id: tab.id }); })
-              .child(svg("mods/abdh-tabs/icons/close.svg").size(10)))));
+              .child(svg("mods/agentee-tabs/icons/close.svg").size(10)))));
     };
 
     const plus = div().id("tab-new").size(28).flex_none().flex().items_center().justify_center().rounded(7)
@@ -152,13 +152,13 @@ export default class Tabs extends View {
         run("layout.show", { id: "panel" });
         run("layout.select", { stack: "panel-body", child: id });
       })
-      .child(svg(`mods/abdh-tabs/icons/${icon}.svg`).size(15));
+      .child(svg(`mods/agentee-tabs/icons/${icon}.svg`).size(15));
     const f = focused();
     // The status bar resolves the open editor file's project root; use the same
     // root for the overlay, so Git opens the repository Files shows.
-    const g = shared("abdh.git.status");
+    const g = shared("agentee.git.status");
     const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
-    const projectRoot = (pane?.mod === "abdh-editor" ? g?.cwd : null) ?? f?.cwd ?? spaces().find((s) => s.active)?.folder ?? home();
+    const projectRoot = (pane?.mod === "agentee-editor" ? g?.cwd : null) ?? f?.cwd ?? spaces().find((s) => s.active)?.folder ?? home();
     // What the status bar's git read says is waiting here: a dot on the Git
     // button (conflicts or something to pull: red, changes: amber, to push: green).
     const waiting = g ? [
@@ -172,20 +172,20 @@ export default class Tabs extends View {
     // Theme settings → Git → Open as a tab: focus or make a Git tab in this
     // space; otherwise open the dialog over the work area.
     const openGit = () => {
-      if (shared("abdh.settings")?.git?.openInTab === true) {
+      if (shared("agentee.settings")?.git?.openInTab === true) {
         const active = spaces().find((s) => s.active);
         const tabs = new Set((active?.tabs ?? []).map((t) => t.id));
-        const pane = panes().find((p) => p.mod === "abdh-git" && tabs.has(p.tab));
+        const pane = panes().find((p) => p.mod === "agentee-git" && tabs.has(p.tab));
         if (pane) {
           run("tab.select", { id: pane.tab });
           run("pane.focus", { pane: pane.pane });
           return;
         }
         ensureSpace();
-        run("tab.new", { name: "Git", mod: "abdh-git" });
+        run("tab.new", { name: "Git", mod: "agentee-git" });
         return;
       }
-      openOverlay({ mod: "abdh-git", kind: "dialog", width: 520, height: 520, props: { root: projectRoot } });
+      openOverlay({ mod: "agentee-git", kind: "dialog", width: 520, height: 520, props: { root: projectRoot } });
     };
     const lightsPadding = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && root?.traffic_lights
       ? Math.max(10, (root.traffic_lights[0] + 64) / (settings().zoom ?? 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
@@ -202,11 +202,11 @@ export default class Tabs extends View {
         .child(div().id("top-git").size(26).flex_none().flex().items_center().justify_center().rounded(6).relative()
           .text_color(t.dim).cursor_pointer().hover((x) => x.bg(t.hover).text_color(t.foreground)).tooltip(gitTip)
           .on_mouse_down("left", stop).on_click(() => openGit())
-          .child(svg("mods/abdh-tabs/icons/branch.svg").size(15))
+          .child(svg("mods/agentee-tabs/icons/branch.svg").size(15))
           .when(Boolean(gitDot), (el) => el.child(div().absolute().top(3).right(3).size(7).rounded_full().bg(gitDot).border_1().border_color(t.chrome)))))
       .when(w?.buttons, el => el.child(h_flex().h(31).items_center().gap(2)
-        .child(button("minimize", w.platform === "windows" ? svg("mods/abdh-tabs/icons/win-min.svg").size(15) : "−", () => run("window.minimize")))
-        .child(button("maximize", w.platform === "windows" ? svg(`mods/abdh-tabs/icons/${w.maximized ? "win-restore" : "win-max"}.svg`).size(15) : "□", () => run("window.maximize")))
-        .child(button("close-window", svg("mods/abdh-tabs/icons/win-close.svg").size(15), () => run("window.close")))));
+        .child(button("minimize", w.platform === "windows" ? svg("mods/agentee-tabs/icons/win-min.svg").size(15) : "−", () => run("window.minimize")))
+        .child(button("maximize", w.platform === "windows" ? svg(`mods/agentee-tabs/icons/${w.maximized ? "win-restore" : "win-max"}.svg`).size(15) : "□", () => run("window.maximize")))
+        .child(button("close-window", svg("mods/agentee-tabs/icons/win-close.svg").size(15), () => run("window.close")))));
   }
 }

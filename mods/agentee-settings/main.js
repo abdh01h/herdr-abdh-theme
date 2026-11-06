@@ -8,7 +8,7 @@
 // updates.js) and runs the official installer from here; the install itself is
 // detached, so this panel only starts it and polls `install.result`.
 //
-// This mod owns `abdh.settings`: it loads `abdh-settings.json` from appHome(),
+// This mod owns `agentee.settings`: it loads `agentee-settings.json` from appHome(),
 // merges the defaults below, publishes the result with setShared so the other
 // Agentee panels react, and writes the whole file back on every edit.
 // Nothing outside this mod writes that file.
@@ -252,9 +252,9 @@ function platform() {
   return /^[A-Za-z]:[\\/]/.test(appHome()) ? "windows" : "linux";
 }
 
-export default class AbdhSettings extends View {
+export default class AgenteeSettings extends View {
   init(_props, cx) {
-    this.file = `${appHome()}/abdh-settings.json`;
+    this.file = `${appHome()}/agentee-settings.json`;
     this.value = clone(DEFAULTS);
     this.section = sectionId(props()?.section);
     this.inputs = {};
@@ -271,13 +271,13 @@ export default class AbdhSettings extends View {
 
     // Updates: the last check is shared so reopening the panel shows it at
     // once, while a check newer than a minute is not repeated.
-    this.update = shared("abdh.updates") ?? null;
+    this.update = shared("agentee.updates") ?? null;
     this.checking = false;
     this.updateError = "";
     this.installing = false;
     this.installError = "";
     this.installed = Boolean(this.update?.installed);
-    this.installDir = `${appHome()}/abdh-update`;
+    this.installDir = `${appHome()}/agentee-update`;
     this.polling = false;
     this.startedAt = 0;
     cx.timer.every(1500, (timerCx) => this.poll(timerCx));
@@ -304,8 +304,8 @@ export default class AbdhSettings extends View {
       }
       // A file that will not parse keeps what the panels already use, so one
       // bad hand edit does not reset every setting to its default.
-      this.value = merge(this.loadError ? shared("abdh.settings") : stored);
-      setShared("abdh.settings", this.value);
+      this.value = merge(this.loadError ? shared("agentee.settings") : stored);
+      setShared("agentee.settings", this.value);
       this.syncInputs();
       cx.notify();
       // The other panels may read the JSON at their init: make it exist once.
@@ -323,12 +323,12 @@ export default class AbdhSettings extends View {
       this.update = found;
       this.updateError = "";
       if (found.changed.length) this.installed = false;
-      setShared("abdh.updates", found);
+      setShared("agentee.updates", found);
     } catch (error) {
       // Keep the last result on screen, but record the attempt so a failing
       // check is not retried on every open.
       this.update = { ...(this.update ?? {}), at: Date.now() };
-      setShared("abdh.updates", this.update);
+      setShared("agentee.updates", this.update);
       this.updateError = message(error);
     }
     this.checking = false;
@@ -392,7 +392,7 @@ export default class AbdhSettings extends View {
       // this instance usually goes away before the next frame: the toast and
       // the flag are best effort, and the reloaded panel re-checks on open.
       this.installed = true;
-      setShared("abdh.updates", { ...(this.update ?? {}), at: Date.now(), changed: [] });
+      setShared("agentee.updates", { ...(this.update ?? {}), at: Date.now(), changed: [] });
       notify({ title: "Agentee updated", body: "The theme files were replaced and Herdr reloaded the layout.", level: "success" });
       cx.notify();
     });
@@ -500,7 +500,7 @@ export default class AbdhSettings extends View {
       this.inputs["tabs.maxWidth"]?.set_value(text(next.tabs.maxWidth));
     }
     this.value = next;
-    setShared("abdh.settings", next);
+    setShared("agentee.settings", next);
     this.save(cx);
     cx.notify();
   }
@@ -649,7 +649,7 @@ export default class AbdhSettings extends View {
           .hover((st) => st.bg(t.raised).text_color(t.foreground))
           .cursor_pointer()
           .on_click((_e, cx) => { this.section = section.id; cx.notify(); })
-          .child(svg(`mods/abdh-settings/icons/${ICONS[section.id] ?? "palette"}.svg`).size(15).flex_none().text_color(active ? t.accent : t.dim))
+          .child(svg(`mods/agentee-settings/icons/${ICONS[section.id] ?? "palette"}.svg`).size(15).flex_none().text_color(active ? t.accent : t.dim))
           .child(div().flex_1().min_w(0).truncate().text_size(13.5).child(section.label));
       }))
       .child(div().flex_1())
@@ -677,7 +677,7 @@ export default class AbdhSettings extends View {
         const on = name === (light ? s.theme_light : s.theme_dark);
         return h_flex().id(`theme-${name}`).h(30).gap(8).items_center().border_b(1).border_color(t.border)
           .cursor_pointer().when(on, (el) => el.bg(t.raised)).hover((el) => el.bg(t.hover))
-          .on_click((_e, cx) => { run("app.theme", { name }); setShared("abdh.theme", name); cx.notify(); })
+          .on_click((_e, cx) => { run("app.theme", { name }); setShared("agentee.theme", name); cx.notify(); })
           .child(div().flex_1().min_w(0).truncate().text_size(13).text_color(on ? t.foreground : t.muted).child(name.replace(/-/g, " ")))
           .child(div().text_size(10).text_color(t.dim).child(light ? "light" : "dark"))
           .child(h_flex().gap(4).items_center()
@@ -740,9 +740,9 @@ export default class AbdhSettings extends View {
     return v_flex().w_full()
       .child(h_flex().py(14).gap(10).items_center().border_b(1).border_color(t.border)
         .child(div().flex_1().min_w(0).text_size(13.5).text_color(color).child(line))
-        .child(this.pill(t, "abdh-update-check", this.checking ? "Checking\u2026" : "Check now", !busy, (cx) => this.checkNow(cx)))
-        .when(behind > 0 && !this.installing, (el) => el.child(this.pill(t, "abdh-update-install", "Install update", true, (cx) => this.install(cx))))
-        .when(this.installing, (el) => el.child(this.pill(t, "abdh-update-installing", "Installing\u2026", false, () => {}))))
+        .child(this.pill(t, "agentee-update-check", this.checking ? "Checking\u2026" : "Check now", !busy, (cx) => this.checkNow(cx)))
+        .when(behind > 0 && !this.installing, (el) => el.child(this.pill(t, "agentee-update-install", "Install update", true, (cx) => this.install(cx))))
+        .when(this.installing, (el) => el.child(this.pill(t, "agentee-update-installing", "Installing\u2026", false, () => {}))))
       .child(this.card(t, section));
   }
 
@@ -753,7 +753,7 @@ export default class AbdhSettings extends View {
       .min_w(0)
       .h_full()
       .min_h(0)
-      .child(div().id("abdh-settings-body").size_full().overflow_y_scroll()
+      .child(div().id("agentee-settings-body").size_full().overflow_y_scroll()
         .child(v_flex().px(28).py(22)
           .child(div().pt(6).pb(8).text_size(12).font_semibold().text_color(t.dim).child(section.label.toUpperCase()))
           .when(Boolean(section.note), (el) => el.child(div().pb(10).text_size(12.5).text_color(t.dim).child(section.note)))
@@ -763,7 +763,7 @@ export default class AbdhSettings extends View {
   render(cx) {
     const t = theme();
     return h_flex()
-      .id("abdh-settings")
+      .id("agentee-settings")
       .track_focus(this.handle)
       .on_key_down((e, cx) => {
         if (e.key !== "escape") return;

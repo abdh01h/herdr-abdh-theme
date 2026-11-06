@@ -1,5 +1,5 @@
 // Agentee status bar: the focused folder's git state on the left, the file the
-// editor pane published to shared("abdh.editor") on the right.
+// editor pane published to shared("agentee.editor") on the right.
 // Cursor line/column is not exposed by EditorState yet, so it is not shown.
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
@@ -50,9 +50,9 @@ export default class Status extends View {
     this.fileRoot = null;
     // A spawn made from render never runs, so the timer does all the looking:
     // a folder change is read within a second, the same folder every 5 s.
-    // shared("abdh.git.changed"): an editor save or a git action, read at once.
+    // shared("agentee.git.changed"): an editor save or a git action, read at once.
     cx.timer.every(1000, (cx) => {
-      const changed = shared("abdh.git.changed") ?? null;
+      const changed = shared("agentee.git.changed") ?? null;
       const poke = changed !== this.changed;
       this.changed = changed;
       this.look(cx, poke || Date.now() - this.at >= 5000);
@@ -66,8 +66,8 @@ export default class Status extends View {
   folder() {
     const f = focused();
     const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
-    const open = shared("abdh.editor");
-    if (open?.path && pane?.mod === "abdh-editor") {
+    const open = shared("agentee.editor");
+    if (open?.path && pane?.mod === "agentee-editor") {
       return this.fileRoot?.path === open.path ? this.fileRoot.root : dirname(open.path);
     }
     return f?.cwd ?? panes().find((p) => p.tab === f?.tab && p.terminal)?.cwd ?? spaces().find((s) => s.active)?.folder ?? null;
@@ -77,12 +77,12 @@ export default class Status extends View {
     if (this.inflight) return;
     const f = focused();
     const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
-    const open = shared("abdh.editor");
+    const open = shared("agentee.editor");
     if (!open?.path) {
       this.fileRoot = null;
-      if (shared("abdh.project")) setShared("abdh.project", null);
+      if (shared("agentee.project")) setShared("agentee.project", null);
     }
-    if (open?.path && pane?.mod === "abdh-editor" && this.fileRoot?.path !== open.path) {
+    if (open?.path && pane?.mod === "agentee-editor" && this.fileRoot?.path !== open.path) {
       const dir = dirname(open.path), want = open.path, space = f?.space ?? null;
       const on = (spaces().find((s) => s.id === f?.space) ?? spaces().find((s) => s.active))?.machine ?? undefined;
       this.fileRoot = { path: want, root: dir, pending: true };
@@ -91,7 +91,7 @@ export default class Status extends View {
         const top = r && r.code === 0 ? r.stdout.trim().replace(/\\/g, "/") : null;
         if (this.fileRoot?.path !== want) return;
         this.fileRoot = { path: want, root: top || dir };
-        setShared("abdh.project", { space, path: want, root: this.fileRoot.root });
+        setShared("agentee.project", { space, path: want, root: this.fileRoot.root });
         this.cwd = undefined;
         this.look(cx, true);
         cx.notify();
@@ -121,16 +121,16 @@ export default class Status extends View {
     const key = JSON.stringify(pub);
     if (key !== this.published) {
       this.published = key;
-      setShared("abdh.git.status", pub);
+      setShared("agentee.git.status", pub);
     }
   }
 
   render() {
     const t = theme();
     const g = this.git;
-    const editorOpen = panes().some((p) => p.mod === "abdh-editor" && p.tab === focused()?.tab);
-    const ed = editorOpen ? shared("abdh.editor") : null;
-    const ui = shared("abdh.settings")?.status ?? {};
+    const editorOpen = panes().some((p) => p.mod === "agentee-editor" && p.tab === focused()?.tab);
+    const ed = editorOpen ? shared("agentee.editor") : null;
+    const ui = shared("agentee.settings")?.status ?? {};
     const folder = this.folder();
     const mac = window()?.platform === "macos";
     const ctrl = mac ? "⌘" : "Ctrl+";
@@ -140,10 +140,10 @@ export default class Status extends View {
     return h_flex().size_full().px(12).gap(12).items_center().bg(t.chrome).border_t(1).border_color(t.border)
       .text_size(11.5).text_color(t.dim)
       .child(h_flex().gap(6).items_center().min_w(0).flex_shrink(1)
-        .child(svg("mods/abdh-status/icons/monitor.svg").size(12).flex_none())
+        .child(svg("mods/agentee-status/icons/monitor.svg").size(12).flex_none())
         .child(div().min_w(0).truncate().child(folder ? shortPath(folder) : "no folder")))
       .when(Boolean(g) && ui.gitBranch !== false, (el) => el.child(h_flex().items_center().gap(6)
-        .child(svg("mods/abdh-status/icons/branch.svg").size(12).flex_none())
+        .child(svg("mods/agentee-status/icons/branch.svg").size(12).flex_none())
         .child(chip("st-branch", g.branch ?? "detached", t.muted, `${g.cwd}\n${g.branch ?? "detached"}`))
         .when(g.ahead > 0, (x) => x.child(chip("st-ahead", `↑${g.ahead}`, t.ansi2, "commits ahead")))
         .when(g.behind > 0, (x) => x.child(chip("st-behind", `↓${g.behind}`, t.ansi3, "commits behind")))
@@ -163,7 +163,7 @@ export default class Status extends View {
         .child(chip("st-eol", ed.eol, t.dim))
         .child(chip("st-enc", ed.encoding, t.dim))
         .child(div().id("st-save").flex_none().text_color(t.dim).hover((s) => s.text_color(t.foreground))
-          .on_click(() => run("abdh-editor.save")).child(`${ctrl}S`)
+          .on_click(() => run("agentee-editor.save")).child(`${ctrl}S`)
           .tooltip("Save (handled by the editor pane when it has focus)"))))
       .when(!ed, (el) => el.child(h_flex().gap(6).items_center().text_color(t.dim)
         .child("no file open")

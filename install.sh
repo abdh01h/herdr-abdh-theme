@@ -17,7 +17,7 @@ REPO="${REPO:-abdh01h/herdr-agentee-theme}"
 BRANCH="${BRANCH:-main}"
 HOME_DIR="${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/abdh-install.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentee-install.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 backup() {
@@ -45,13 +45,23 @@ ROOT="$(find "$TMP" -maxdepth 1 -mindepth 1 -type d | head -n 1)"
 mkdir -p "$HOME_DIR/themes" "$HOME_DIR/layouts" "$HOME_DIR/mods"
 echo "==> Agentee: installing into $HOME_DIR"
 
+# This bundle was called "abdh" before: carry the person's data over first.
+if [ -f "$HOME_DIR/abdh-settings.json" ] && [ ! -f "$HOME_DIR/agentee-settings.json" ]; then
+  backup "$HOME_DIR/abdh-settings.json"
+  mv "$HOME_DIR/abdh-settings.json" "$HOME_DIR/agentee-settings.json"
+fi
+if [ -d "$HOME_DIR/abdh-recovery" ] && [ ! -d "$HOME_DIR/agentee-recovery" ]; then
+  backup "$HOME_DIR/abdh-recovery"
+  mv "$HOME_DIR/abdh-recovery" "$HOME_DIR/agentee-recovery"
+fi
+
 for file in themes/agentee.json layouts/agentee.json layouts/agentee.svg; do
   [ -f "$ROOT/$file" ] || continue
   backup "$HOME_DIR/$file"
   cp "$ROOT/$file" "$HOME_DIR/$file"
 done
 
-for dir in "$ROOT"/mods/abdh-*; do
+for dir in "$ROOT"/mods/agentee-*; do
   [ -d "$dir" ] || continue
   name="$(basename "$dir")"
   case "$name" in *.bak-*) continue ;; esac
@@ -83,6 +93,7 @@ for section, bindings in snippet.items():
         target = keys[section] = {}
     for chord, action in bindings.items():
         target.setdefault(chord, action)
+keys.pop("mod:abdh-editor", None)  # the pre-Agentee editor section
 with open(keys_path, "w", encoding="utf-8") as out:
     json.dump(keys, out, indent=2, ensure_ascii=False)
     out.write("\n")
@@ -101,10 +112,11 @@ for (const [section, bindings] of Object.entries(snippet)) {
   if (!keys[section] || typeof keys[section] !== "object") keys[section] = {};
   for (const [chord, action] of Object.entries(bindings)) if (!(chord in keys[section])) keys[section][chord] = action;
 }
+delete keys["mod:abdh-editor"]; // the pre-Agentee editor section
 fs.writeFileSync(keysPath, JSON.stringify(keys, null, 2) + "\n");
 JSEOF
   else
-    echo "    keys.json not merged (no python3/node); add mod:abdh-editor from keys.snippet.json by hand"
+    echo "    keys.json not merged (no python3/node); add mod:agentee-editor from keys.snippet.json by hand"
   fi
 fi
 
@@ -112,7 +124,7 @@ if command -v herdr-app >/dev/null 2>&1; then
   if [ -d "$HOME_DIR/mods/workspace-chrome" ]; then
   echo "==> Agentee: checking mods"
   failed=0
-  for mod in "$HOME_DIR"/mods/abdh-*; do
+  for mod in "$HOME_DIR"/mods/agentee-*; do
     [ -d "$mod" ] || continue
     case "$(basename "$mod")" in *.bak-*) continue ;; esac
     if ! herdr-app check "$mod" >/dev/null 2>&1; then
@@ -136,5 +148,25 @@ else
   echo "==> Agentee: herdr-app not found; open Herdr and run: herdr-app do layout.switch --name agentee"
 fi
 
+# The old bundle's mods and staging folder go last: the open window still uses
+# them until the layout switch above. A panel-started update runs this script
+# from inside `abdh-update`, so that folder stays for the next run.
+for old in "$HOME_DIR"/mods/abdh-*; do
+  [ -d "$old" ] || continue
+  case "$(basename "$old")" in *.bak-*) continue ;; esac
+  backup "$old"
+  rm -rf "$old"
+done
+self="$(dirname "$0" 2>/dev/null || echo .)"
+case "$self" in
+  "$HOME_DIR/abdh-update"|"$HOME_DIR/abdh-update/"*) ;;
+  *)
+    if [ -d "$HOME_DIR/abdh-update" ]; then
+      backup "$HOME_DIR/abdh-update"
+      rm -rf "$HOME_DIR/abdh-update"
+    fi
+    ;;
+esac
+
 [ -n "$BACKUPS" ] && echo "==> Agentee: backups:$BACKUPS"
-echo "==> Agentee: done. Settings: $HOME_DIR/abdh-settings.json (open Theme settings in the sidebar footer)."
+echo "==> Agentee: done. Settings: $HOME_DIR/agentee-settings.json (open Theme settings in the sidebar footer)."

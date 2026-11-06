@@ -3,8 +3,8 @@
 // Everything drawn here comes from platform probes (see probes/). Missing
 // fields say "unavailable"; the first CPU/disk/network sample says
 // "sampling..." until a second reading gives a real delta. The panel never
-// writes shared state: theme settings are read from shared("abdh.settings")
-// on every render, with appHome()/abdh-settings.json only as an init fallback.
+// writes shared state: theme settings are read from shared("agentee.settings")
+// on every render, with appHome()/agentee-settings.json only as an init fallback.
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
@@ -40,7 +40,7 @@ function systemSettings(source) {
 function shownInLayout(node, visible = true) {
   if (!node || typeof node !== "object") return null;
   const here = visible && !node.hidden;
-  if (node.content?.mod === "abdh-system") return here;
+  if (node.content?.mod === "agentee-system") return here;
   let seen = null;
   for (const child of node.children || []) {
     const shown = shownInLayout(child, here && (node.type !== "stack" || !node.active || node.active === child.id));
@@ -156,15 +156,15 @@ export default class SystemMonitor extends View {
     this.fileSettings = null;
     this.history = { cpu: [], ram: [], down: [], up: [] };
 
-    // The settings overlay owns shared("abdh.settings"); before it has set the
+    // The settings overlay owns shared("agentee.settings"); before it has set the
     // key, a directly launched panel still honours the persisted file.
-    if (shared("abdh.settings") == null) {
+    if (shared("agentee.settings") == null) {
       cx.spawn(async (cx) => {
         try {
-          const text = await readTextFile(`${appHome()}/abdh-settings.json`);
+          const text = await readTextFile(`${appHome()}/agentee-settings.json`);
           if (!text) return;
           const parsed = JSON.parse(text);
-          if (parsed && typeof parsed === "object" && shared("abdh.settings") == null) {
+          if (parsed && typeof parsed === "object" && shared("agentee.settings") == null) {
             this.fileSettings = parsed;
             cx.notify();
           }
@@ -179,7 +179,7 @@ export default class SystemMonitor extends View {
   }
 
   settings() {
-    const value = shared("abdh.settings");
+    const value = shared("agentee.settings");
     return systemSettings(value == null ? this.fileSettings : value);
   }
 
@@ -265,7 +265,7 @@ export default class SystemMonitor extends View {
       : v_flex().w_full().gap(gap).children(cards);
 
     return v_flex()
-      .id("abdh-system-root")
+      .id("agentee-system-root")
       .size_full()
       .bg(t.surface)
       .text_size(11)
@@ -318,14 +318,14 @@ export default class SystemMonitor extends View {
           .items_center()
           .gap(4)
           .child(
-            this.button(t, "abdh-system-pause", this.paused ? "resume" : "pause", this.paused, (clickCx) => {
+            this.button(t, "agentee-system-pause", this.paused ? "resume" : "pause", this.paused, (clickCx) => {
               this.paused = !this.paused;
               this.lastAt = 0;
               clickCx.notify();
             }),
           )
           .child(
-            this.button(t, "abdh-system-refresh", "refresh", false, (clickCx) => {
+            this.button(t, "agentee-system-refresh", "refresh", false, (clickCx) => {
               this.lastAt = 0;
               this.sample(clickCx);
             }),
@@ -438,7 +438,7 @@ export default class SystemMonitor extends View {
             cores.map((value, index) => {
               const coreHeight = value === null ? 1 : Math.max(2, Math.round((clamp(value, 0, 100) / 100) * 14));
               return v_flex()
-                .id(`abdh-core-${index}`)
+                .id(`agentee-core-${index}`)
                 .flex_1()
                 .h(14)
                 .rounded(1)

@@ -1,6 +1,6 @@
 # Local-only files
-abdh-settings.json
-abdh-recovery/
+agentee-settings.json
+agentee-recovery/
 *.log
 # Written by `herdr-app check` / Herdr into every mod folder
 gpui-kit.d.ts

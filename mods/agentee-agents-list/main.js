@@ -428,7 +428,7 @@ export default class Agents extends View {
                 .rounded(5)
                 .text_color(t.dim)
                 .hover((s) => s.bg(t.hover).text_color(t.foreground))
-                .on_click(() => openOverlay({ mod: "abdh-agents-list", kind: "popup", width: 200, height: 150, props: { sortMenu: true } }))
+                .on_click(() => openOverlay({ mod: "agentee-agents-list", kind: "popup", width: 200, height: 150, props: { sortMenu: true } }))
                 .tooltip(`Sort agents: ${sort.label}`)
                 .child(svg(`mods/workspace-chrome/${sort.icon}.svg`).size(14)),
             ),

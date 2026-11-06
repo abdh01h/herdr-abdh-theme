@@ -47,7 +47,7 @@ function To-Hashtable($value) {
   return $value
 }
 
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ("abdh-install-" + [guid]::NewGuid().ToString("N"))
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ("agentee-install-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
   Write-Host "==> Agentee: downloading $Repo@$Branch"
@@ -63,13 +63,27 @@ try {
   }
 
   Write-Host "==> Agentee: installing into $homeDir"
+
+  # This bundle was called "abdh" before: carry the person's data over first.
+  $newSettings = Join-Path $homeDir "agentee-settings.json"
+  $oldSettings = Join-Path $homeDir "abdh-settings.json"
+  if ((Test-Path -LiteralPath $oldSettings) -and -not (Test-Path -LiteralPath $newSettings)) {
+    Backup $oldSettings
+    Move-Item -LiteralPath $oldSettings -Destination $newSettings
+  }
+  $newRecovery = Join-Path $homeDir "agentee-recovery"
+  $oldRecovery = Join-Path $homeDir "abdh-recovery"
+  if ((Test-Path -LiteralPath $oldRecovery) -and -not (Test-Path -LiteralPath $newRecovery)) {
+    Backup $oldRecovery
+    Move-Item -LiteralPath $oldRecovery -Destination $newRecovery
+  }
   foreach ($file in @("themes\agentee.json", "layouts\agentee.json", "layouts\agentee.svg")) {
     $src = Join-Path $root.FullName $file
     $dst = Join-Path $homeDir $file
     Backup $dst
     Copy-Item -LiteralPath $src -Destination $dst -Force
   }
-  foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $root.FullName "mods") -Directory -Filter "abdh-*" | Where-Object { $_.Name -notmatch '\.bak-' }) {
+  foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $root.FullName "mods") -Directory -Filter "agentee-*" | Where-Object { $_.Name -notmatch '\.bak-' }) {
     $dst = Join-Path $homeDir ("mods\" + $mod.Name)
     Backup $dst
     if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
@@ -94,6 +108,8 @@ try {
           if (-not $keys[$section].ContainsKey($chord)) { $keys[$section][$chord] = $snippet[$section][$chord] }
         }
       }
+      # The pre-Agentee editor section binds a mod that no longer exists.
+      if ($keys.ContainsKey("mod:abdh-editor")) { $keys.Remove("mod:abdh-editor") }
       $json = $keys | ConvertTo-Json -Depth 12
     [IO.File]::WriteAllText($keysPath, $json + "`n", (New-Object System.Text.UTF8Encoding($false)))
     }
@@ -117,7 +133,7 @@ try {
     }
     Write-Host "==> Agentee: checking mods"
     $failed = 0
-    foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $homeDir "mods") -Directory -Filter "abdh-*" | Where-Object { $_.Name -notmatch '\.bak-' }) {
+    foreach ($mod in Get-ChildItem -LiteralPath (Join-Path $homeDir "mods") -Directory -Filter "agentee-*" | Where-Object { $_.Name -notmatch '\.bak-' }) {
       if ((Invoke-Herdr @("check", $mod.FullName)) -ne 0) { $failed += 1; Write-Warning "check failed: $($mod.Name)" }
     }
     if ($failed -eq 0) { Write-Host "    all Agentee mods pass" }
@@ -132,8 +148,23 @@ try {
     Write-Host "==> Agentee: herdr-app not found; open Herdr and run: herdr-app do layout.switch --name agentee"
   }
 
+  # The old "abdh" bundle's mods and staging folder go last: the open window
+  # still uses them until the layout switch above. When the panel starts an
+  # update, this installer runs inside `abdh-update` with its log open, so that
+  # folder is left in place for the next run.
+  foreach ($old in Get-ChildItem -LiteralPath (Join-Path $homeDir "mods") -Directory -Filter "abdh-*" | Where-Object { $_.Name -notmatch '\.bak-' }) {
+    Backup $old.FullName
+    Remove-Item -LiteralPath $old.FullName -Recurse -Force
+  }
+  $oldUpdate = Join-Path $homeDir "abdh-update"
+  $inside = $PSScriptRoot -and ([IO.Path]::GetFullPath($PSScriptRoot) -eq [IO.Path]::GetFullPath($oldUpdate))
+  if ((Test-Path -LiteralPath $oldUpdate) -and -not $inside) {
+    Backup $oldUpdate
+    Remove-Item -LiteralPath $oldUpdate -Recurse -Force
+  }
+
   if ($backups.Count -gt 0) { Write-Host ("==> Agentee: backups (" + $backups.Count + ") - " + ($backups -join ", ")) }
-  Write-Host "==> Agentee: done. Settings: $homeDir\abdh-settings.json (open Theme settings in the sidebar footer)."
+  Write-Host "==> Agentee: done. Settings: $homeDir\agentee-settings.json (open Theme settings in the sidebar footer)."
 }
 catch {
   Write-Error "Agentee install failed: $($_.Exception.Message)"

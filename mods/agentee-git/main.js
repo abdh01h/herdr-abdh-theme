@@ -1,8 +1,8 @@
-// abdh-git: a compact overlay for branches, checkout, branch creation and
+// agentee-git: a compact overlay for branches, checkout, branch creation and
 // merges, plus a one-line blame card for a file:line.
 //
 // Opened by the layout's own controls (no docked placement):
-//   openOverlay({ kind: "dialog", mod: "abdh-git", width: 520, height: 520,
+//   openOverlay({ kind: "dialog", mod: "agentee-git", width: 520, height: 520,
 //                 props: { root, action?: "branches" | "create" | "merge", branch?, file?, line? } })
 //
 // Every operation is shown as a confirm step before git runs. Nothing here
@@ -46,15 +46,15 @@ const few = (paths, max = 4) =>
   paths.slice(0, max).join(", ") + (paths.length > max ? ` and ${paths.length - max} more` : "");
 const firstLine = (text) => String(text ?? "").split("\n").find((l) => l.trim()) ?? "";
 
-// The refresh interval abdh-settings stores, in seconds. The settings mod owns
+// The refresh interval agentee-settings stores, in seconds. The settings mod owns
 // the object; this only reads it.
 function refreshSeconds() {
-  const settings = shared("abdh.settings");
+  const settings = shared("agentee.settings");
   const value = Number(settings && typeof settings === "object" ? settings.git?.refresh : NaN);
   return Math.max(2, Math.floor(Number.isFinite(value) ? value : 5));
 }
 
-export default class AbdhGit extends View {
+export default class AgenteeGit extends View {
   init(_props, cx) {
     const p = props() ?? {};
     this.mode = ["changes", "create", "merge", "history"].includes(p.action) ? p.action : "branches";
@@ -62,7 +62,7 @@ export default class AbdhGit extends View {
     this.wantedBranch = p.branch ?? null;
     this.selected = null;
     // Folded branch sections; remote starts folded, and the choice is kept.
-    const folded = shared("abdh.git.folded");
+    const folded = shared("agentee.git.folded");
     this.folded = new Set(Array.isArray(folded) ? folded : ["remote"]);
     this.confirm = null;
     this.notice = "";
@@ -123,7 +123,7 @@ export default class AbdhGit extends View {
     if (p.file && !p.line) { this.loadFileBlame(cx); return; }
 
     // One gentle tick re-reads the settings interval, so changing it in
-    // abdh-settings takes effect without reloading this overlay. Data is only
+    // agentee-settings takes effect without reloading this overlay. Data is only
     // fetched when the interval is due.
     this.refreshSeconds = refreshSeconds();
     this.lastRefreshAt = 0;
@@ -152,9 +152,9 @@ export default class AbdhGit extends View {
     const f = focused();
     const pane = f?.pane ? panes().find((x) => x.pane === f.pane) : null;
     const space = spaces().find((s) => s.active);
-    const project = shared("abdh.project");
+    const project = shared("agentee.project");
     const here = project?.root && (!project.space || project.space === space?.id);
-    if (pane?.mod === "abdh-git" && here) return project.root;
+    if (pane?.mod === "agentee-git" && here) return project.root;
     if (f?.cwd && !pane?.mod) return f.cwd;
     if (here) return project.root;
     const tabs = new Set((space?.tabs ?? []).map((t) => t.id));
@@ -357,11 +357,11 @@ export default class AbdhGit extends View {
   blameView(t) {
     const p = props() ?? {};
     const b = this.fileBlame ?? { loading: true, rows: [], error: null };
-    return v_flex().id("abdh-git-blame").size_full().min_h(0).bg(t.popover).text_size(12).text_color(t.foreground)
+    return v_flex().id("agentee-git-blame").size_full().min_h(0).bg(t.popover).text_size(12).text_color(t.foreground)
       .child(h_flex().h(40).flex_none().px(12).gap(8).items_center().border_b(1).border_color(t.border).bg(t.chrome)
         .child(div().flex_none().text_size(12).font_semibold().child("Git blame"))
         .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(t.dim).child(`${baseName(p.file)} \u00b7 ${baseName(this.folder())}`))
-        .child(div().id("abdh-git-blame-close").size(22).flex_none().flex().items_center().justify_center().rounded(5)
+        .child(div().id("agentee-git-blame-close").size(22).flex_none().flex().items_center().justify_center().rounded(5)
           .text_size(12).text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => closeOverlay(p.overlay)).child("\u2715")))
       .when(b.loading, (el) => el.child(div().p(16).text_color(t.dim).child("Reading history\u2026")))
@@ -394,7 +394,7 @@ export default class AbdhGit extends View {
     const id = props()?.overlay;
     if (id) { closeOverlay(id); return; }
     const tab = focused()?.tab;
-    const pane = panes().find((x) => x.mod === "abdh-git" && x.tab === tab);
+    const pane = panes().find((x) => x.mod === "agentee-git" && x.tab === tab);
     if (pane) run("pane.close", { pane: pane.pane });
   }
 
@@ -511,7 +511,7 @@ export default class AbdhGit extends View {
       }
       await this.load();
       // Spaces and the status bar re-read git now rather than on their timers.
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       cx.notify();
     });
   }
@@ -583,12 +583,12 @@ export default class AbdhGit extends View {
     }
     const path = this.changedPath(entry);
     const tab = focused()?.tab ?? null;
-    const pane = panes().find((p) => p.mod === "abdh-editor" && p.tab === tab);
+    const pane = panes().find((p) => p.mod === "agentee-editor" && p.tab === tab);
     if (pane) {
-      setShared("abdh.open", { path, root, on: null, tab, nonce: `${Date.now()}-${Math.random()}` });
+      setShared("agentee.open", { path, root, on: null, tab, nonce: `${Date.now()}-${Math.random()}` });
       run("pane.focus", { pane: pane.pane });
     } else {
-      run("pane.split", { direction: "right", mod: "abdh-editor", props: { path, root, on: null } });
+      run("pane.split", { direction: "right", mod: "agentee-editor", props: { path, root, on: null } });
     }
     this.dismiss();
   }
@@ -611,7 +611,7 @@ export default class AbdhGit extends View {
         notify({ title: entry.staged ? "Unstage failed" : "Stage failed", body: firstLine(this.notice), level: "error" });
       }
       await this.load();
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       cx.notify();
     });
   }
@@ -630,7 +630,7 @@ export default class AbdhGit extends View {
         notify({ title: "Stage failed", body: firstLine(this.notice), level: "error" });
       }
       await this.load();
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       cx.notify();
     });
   }
@@ -666,7 +666,7 @@ export default class AbdhGit extends View {
         notify({ title: "Commit failed", body: firstLine(this.notice), level: "error" });
       }
       await this.load();
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       cx.notify();
     });
   }
@@ -725,12 +725,12 @@ export default class AbdhGit extends View {
         notify({ title: result.title ?? "Git", body: result.message, level: "success", timeout: 3000 });
       } else {
         this.notice = result.message;
-        const quiet = result.title === "Merge conflicts" && shared("abdh.settings")?.git?.conflictNotices === false;
+        const quiet = result.title === "Merge conflicts" && shared("agentee.settings")?.git?.conflictNotices === false;
         if (!quiet) notify({ title: result.title ?? "Git error", body: firstLine(result.message), level: "error" });
       }
       await this.load();
       // Spaces and the status bar re-read git now rather than on their timers.
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       cx.notify();
     });
   }
@@ -981,7 +981,7 @@ export default class AbdhGit extends View {
     if (b.track.behind) track.push(`\u2193${b.track.behind}`);
     if (b.track.gone) track.push("gone");
     return h_flex()
-      .id(`abdh-git-br-${b.kind}-${b.name}`)
+      .id(`agentee-git-br-${b.kind}-${b.name}`)
       .h(28)
       .flex_none()
       .px(8)
@@ -1021,7 +1021,7 @@ export default class AbdhGit extends View {
   sectionHeader(t, label, count) {
     const open = !this.folded.has(label);
     return h_flex()
-      .id(`abdh-git-section-${label}`)
+      .id(`agentee-git-section-${label}`)
       .h(22)
       .flex_none()
       .px(6)
@@ -1034,10 +1034,10 @@ export default class AbdhGit extends View {
       .on_click((_e, cx) => {
         if (open) this.folded.add(label);
         else this.folded.delete(label);
-        setShared("abdh.git.folded", [...this.folded]);
+        setShared("agentee.git.folded", [...this.folded]);
         cx.notify();
       })
-      .child(svg(`mods/abdh-explorer/icons/chevron-${open ? "down" : "right"}.svg`).size(11).flex_none())
+      .child(svg(`mods/agentee-explorer/icons/chevron-${open ? "down" : "right"}.svg`).size(11).flex_none())
       .child(div().text_size(9.5).font_semibold().child(`${label.toUpperCase()} \u00b7 ${count}`));
   }
 
@@ -1079,7 +1079,7 @@ export default class AbdhGit extends View {
       .min_h(0)
       .child(
         v_flex()
-          .id("abdh-git-list")
+          .id("agentee-git-list")
           .size_full()
           .overflow_y_scroll()
           .gap(1)
@@ -1087,7 +1087,7 @@ export default class AbdhGit extends View {
           .when(!st.loading && !st.root, (el) => el.child(this.notRepo(t, st)))
           .when(Boolean(st.root), (el) => el.children(rows)),
       )
-      .child(Scrollbar.vertical("abdh-git-list").absolute().inset_0());
+      .child(Scrollbar.vertical("agentee-git-list").absolute().inset_0());
   }
 
   changesBody(t, cx) {
@@ -1158,7 +1158,7 @@ export default class AbdhGit extends View {
       )
       .child(
         entries.length
-          ? v_flex().id("abdh-git-changes").flex_1().min_h(0).overflow_y_scrollbar().gap(1).children(entries.map(row))
+          ? v_flex().id("agentee-git-changes").flex_1().min_h(0).overflow_y_scrollbar().gap(1).children(entries.map(row))
           : div().flex_1().min_h(0).p(12).text_size(11).text_color(t.dim).child("No changes"),
       )
       .child(
@@ -1211,7 +1211,7 @@ export default class AbdhGit extends View {
       .child(field("sourceValue", this.sourceInput))
       .child(
         h_flex()
-          .id("abdh-git-checkout-toggle")
+          .id("agentee-git-checkout-toggle")
           .h(24)
           .gap(7)
           .items_center()
@@ -1311,7 +1311,7 @@ export default class AbdhGit extends View {
 
     const chip = (m) =>
       h_flex()
-        .id(`abdh-git-tab-${m.id}`)
+        .id(`agentee-git-tab-${m.id}`)
         .h(24)
         .px(9)
         .items_center()
@@ -1371,14 +1371,14 @@ export default class AbdhGit extends View {
       )
       .when(Boolean(st.root), (el) => el.child(branchChip))
       .when(Boolean(st.root), (el) => el
-        .child(headerButton("abdh-git-fetch", this.fetching ? "Fetching…" : "Fetch", "git fetch --all --prune", (c) => this.fetch(c)))
-        .child(headerButton("abdh-git-pull", st.behind > 0 ? `Pull ↓${st.behind}` : "Pull",
+        .child(headerButton("agentee-git-fetch", this.fetching ? "Fetching…" : "Fetch", "git fetch --all --prune", (c) => this.fetch(c)))
+        .child(headerButton("agentee-git-pull", st.behind > 0 ? `Pull ↓${st.behind}` : "Pull",
           st.upstream ? `git pull --ff-only from ${st.upstream}` : "No upstream to pull from", (c) => this.askPull(c)))
-        .child(headerButton("abdh-git-push", st.ahead > 0 ? `Push ↑${st.ahead}` : "Push",
+        .child(headerButton("agentee-git-push", st.ahead > 0 ? `Push ↑${st.ahead}` : "Push",
           st.upstream ? `git push to ${st.upstream}` : "No upstream to push to", (c) => this.askPush(c))))
       .child(
         div()
-          .id("abdh-git-refresh")
+          .id("agentee-git-refresh")
           .h(21)
           .w(21)
           .flex_none()
@@ -1395,7 +1395,7 @@ export default class AbdhGit extends View {
       )
       .child(
         div()
-          .id("abdh-git-close")
+          .id("agentee-git-close")
           .h(21)
           .w(21)
           .flex_none()
@@ -1424,7 +1424,7 @@ export default class AbdhGit extends View {
       .child(div().flex_none().text_size(10).text_color(status.color).child(status.text));
 
     const notice = div()
-      .id("abdh-git-notice")
+      .id("agentee-git-notice")
       .flex_none()
       .px(12)
       .py(6)
@@ -1458,13 +1458,13 @@ export default class AbdhGit extends View {
         .bg(t.surface)
         .child(div().flex_1().min_w(0).text_size(11).text_color(t.foreground).child(this.describe(this.confirm)))
         .child(
-          this.button(t, "abdh-git-cancel", "Cancel", false, (c) => {
+          this.button(t, "agentee-git-cancel", "Cancel", false, (c) => {
             this.confirm = null;
             this.notice = "";
             c.notify();
           }),
         )
-        .child(this.button(t, "abdh-git-confirm", this.busy ? "Working\u2026" : "Confirm", true, (c) => this.execute(c)));
+        .child(this.button(t, "agentee-git-confirm", this.busy ? "Working\u2026" : "Confirm", true, (c) => this.execute(c)));
 
     const actionHint = (() => {
       if (this.mode === "history") return `${this.history.rows.length} commits \u00b7 read-only`;
@@ -1492,28 +1492,28 @@ export default class AbdhGit extends View {
       .border_color(t.border)
       .bg(t.surface)
       .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(t.muted).child(actionHint))
-      .when(this.mode === "create", (el) => el.child(this.button(t, "abdh-git-create", "Create branch", true, (c) => this.askCreate(c))))
+      .when(this.mode === "create", (el) => el.child(this.button(t, "agentee-git-create", "Create branch", true, (c) => this.askCreate(c))))
       .when(this.mode === "changes", (el) => el
-        .child(this.button(t, "abdh-git-stage-all", "Stage all", false, (c) => this.stageAll(c)))
-        .child(this.button(t, "abdh-git-commit", "Commit", true, (c) => this.commit(c))))
+        .child(this.button(t, "agentee-git-stage-all", "Stage all", false, (c) => this.stageAll(c)))
+        .child(this.button(t, "agentee-git-commit", "Commit", true, (c) => this.commit(c))))
       .when(
         this.mode === "merge" && Boolean(this.selected) && !(this.selected.kind === "local" && this.selected.name === st.branch),
-        (el) => el.child(this.button(t, "abdh-git-merge", "Merge", true, (c) => this.askMerge(c))),
+        (el) => el.child(this.button(t, "agentee-git-merge", "Merge", true, (c) => this.askMerge(c))),
       )
       .when(
         this.mode === "branches" && Boolean(this.selected) && !(this.selected.kind === "local" && this.selected.name === st.branch),
         (el) =>
           el
-            .child(this.button(t, "abdh-git-delete", "Delete", false, (c) => this.askDelete(c), true))
-            .child(this.button(t, "abdh-git-checkout", "Checkout", true, (c) => this.askCheckout(c)))
-            .child(this.button(t, "abdh-git-merge-sel", "Merge", false, (c) => this.askMerge(c))),
+            .child(this.button(t, "agentee-git-delete", "Delete", false, (c) => this.askDelete(c), true))
+            .child(this.button(t, "agentee-git-checkout", "Checkout", true, (c) => this.askCheckout(c)))
+            .child(this.button(t, "agentee-git-merge-sel", "Merge", false, (c) => this.askMerge(c))),
       );
 
     // Deleting asks in a dialog over the list, not in the bottom bar.
     const del = this.confirm?.kind === "delete" ? this.confirm : null;
     const deleteDialog = () =>
       div()
-        .id("abdh-git-delete-scrim")
+        .id("agentee-git-delete-scrim")
         .absolute()
         .inset_0()
         .flex()
@@ -1523,7 +1523,7 @@ export default class AbdhGit extends View {
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .child(
           v_flex()
-            .id("abdh-git-delete-dialog")
+            .id("agentee-git-delete-dialog")
             .w(400)
             .p(16)
             .gap(10)
@@ -1542,12 +1542,12 @@ export default class AbdhGit extends View {
                   : "Removes the branch here. Its commits are merged, so nothing is lost; the remote branch, if any, is kept.",
             ))
             .child(h_flex().pt(4).gap(8).justify_end()
-              .child(this.button(t, "abdh-git-delete-cancel", "Cancel", false, (c) => {
+              .child(this.button(t, "agentee-git-delete-cancel", "Cancel", false, (c) => {
                 this.confirm = null;
                 this.notice = "";
                 c.notify();
               }))
-              .child(this.button(t, "abdh-git-delete-confirm", this.busy ? "Deleting…" : del.force ? "Delete anyway" : "Delete", true, (c) => this.execute(c), true))),
+              .child(this.button(t, "agentee-git-delete-confirm", this.busy ? "Deleting…" : del.force ? "Delete anyway" : "Delete", true, (c) => this.execute(c), true))),
         );
 
     const footer = h_flex()
@@ -1565,7 +1565,7 @@ export default class AbdhGit extends View {
       );
 
     return v_flex()
-      .id("abdh-git")
+      .id("agentee-git")
       .track_focus(this.handle)
       .on_key_down((e, cx) => this.onKey(e, cx))
       .size_full()

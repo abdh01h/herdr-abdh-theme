@@ -40,7 +40,7 @@
           },
           "window_drag": true,
           "content": {
-            "mod": "abdh-chrome",
+            "mod": "agentee-chrome",
             "props": {
               "role": "brand"
             }
@@ -54,7 +54,7 @@
           },
           "min": 90,
           "content": {
-            "mod": "abdh-spaces"
+            "mod": "agentee-spaces"
           }
         },
         {
@@ -65,7 +65,7 @@
           },
           "min": 90,
           "content": {
-            "mod": "abdh-agents-list"
+            "mod": "agentee-agents-list"
           }
         },
         {
@@ -75,7 +75,7 @@
             "px": 40
           },
           "content": {
-            "mod": "abdh-chrome",
+            "mod": "agentee-chrome",
             "props": {
               "role": "footer"
             }
@@ -96,7 +96,7 @@
           },
           "window_drag": true,
           "content": {
-            "mod": "abdh-tabs"
+            "mod": "agentee-tabs"
           }
         },
         {
@@ -145,21 +145,21 @@
                       "id": "panel-files",
                       "type": "block",
                       "content": {
-                        "mod": "abdh-explorer"
+                        "mod": "agentee-explorer"
                       }
                     },
                     {
                       "id": "panel-agents",
                       "type": "block",
                       "content": {
-                        "mod": "abdh-agents"
+                        "mod": "agentee-agents"
                       }
                     },
                     {
                       "id": "panel-system",
                       "type": "block",
                       "content": {
-                        "mod": "abdh-system"
+                        "mod": "agentee-system"
                       }
                     }
                   ]
@@ -175,7 +175,7 @@
             "px": 24
           },
           "content": {
-            "mod": "abdh-status"
+            "mod": "agentee-status"
           }
         }
       ]

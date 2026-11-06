@@ -14,7 +14,7 @@ export default class Menu extends View {
       if (item.command) run(item.command, item.args ?? {});
       else if (item.shared) setShared(item.shared, { ...(item.value ?? {}), nonce: `${Date.now()}-${Math.random()}` });
     };
-    return v_flex().id("abdh-menu").w_full().p(4).gap(1).bg(t.popover).text_size(12.5).text_color(t.muted)
+    return v_flex().id("agentee-menu").w_full().p(4).gap(1).bg(t.popover).text_size(12.5).text_color(t.muted)
       .when(Boolean(p.title), (el) => el.child(div().px(8).pt(4).pb(5).text_size(11).text_color(t.dim).child(p.title)))
       .children(items.map((item, i) => item.separator
         ? div().id(`sep-${i}`).mx(6).my(3).h(1).bg(t.border)

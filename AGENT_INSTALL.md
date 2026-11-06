@@ -24,9 +24,15 @@ curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/in
 
 The installer downloads the repository, backs up what it replaces as
 `*.bak-<timestamp>`, installs `themes/agentee.json`, `layouts/agentee.json` +
-`agentee.svg`, all `mods/abdh-*`, merges `keys.snippet.json` into `keys.json`
+`agentee.svg`, all `mods/agentee-*`, merges `keys.snippet.json` into `keys.json`
 without replacing existing chords, runs `herdr-app check` on each Agentee mod, and
 switches to the layout when a window is running.
+
+It also migrates a machine that ran the older `abdh` build: `mods/abdh-*` folders
+are backed up and removed (so the layout never loads both), `abdh-settings.json`
+moves to `agentee-settings.json`, `abdh-recovery/` moves to `agentee-recovery/`,
+the stale `abdh-update/` staging folder is removed, and the old
+`mod:abdh-editor` section is dropped from `keys.json`.
 
 Useful options: `-HerdrHome <path>` / `HERDR_APP_HOME=<path>`,
 `-Branch <name>` / `BRANCH=<name>`, `-NoLayout` / `NO_LAYOUT=1`.
@@ -38,7 +44,7 @@ would install.
 ## 2. Check the result
 
 ```sh
-herdr-app check <herdr-home>/mods/abdh-<name>   # every Agentee mod must pass
+herdr-app check <herdr-home>/mods/agentee-<name>   # every Agentee mod must pass
 herdr-app do layout.switch --name agentee
 herdr-app status                                 # expect layout "agentee", errors []
 ```
@@ -53,21 +59,25 @@ Copy from a checkout/archive of this repository into the Herdr home:
 
 - `themes/agentee.json` → `themes/`
 - `layouts/agentee.json`, `layouts/agentee.svg` → `layouts/`
-- every `mods/abdh-*` → `mods/` (replace those folders; keep backups)
+- every `mods/agentee-*` → `mods/` (replace those folders; keep backups)
 - merge `keys.snippet.json` into `keys.json`, adding only chords the person
   does not already use
+- on a machine that ran the old `abdh` build: back up and delete the `mods/abdh-*`
+  folders, move `abdh-settings.json` to `agentee-settings.json` (and
+  `abdh-recovery/` to `agentee-recovery/`), and delete the old `mod:abdh-editor`
+  section from `keys.json`
 - then run the checks and layout switch above
 
 Never edit `frame/` (Herdr rewrites it at startup) and never edit Herdr's shipped
 mods (`spaces`, `agents`, `menu`, `new-menu`, `pane`, `picker`) — the theme uses
-its own `abdh-spaces` and `abdh-agents-list`.
+its own `agentee-spaces` and `agentee-agents-list`.
 
 ## 4. Report
 
 - Herdr home used and the timestamped backups created
 - mods installed and the `check` result
 - whether the layout was switched, or the exact command left for the person
-- settings file path: `<herdr-home>/abdh-settings.json`
+- settings file path: `<herdr-home>/agentee-settings.json`
 - anything skipped (for example key merge without python3/node on Unix)
 
 ## Known limits (do not "fix" by inventing data)

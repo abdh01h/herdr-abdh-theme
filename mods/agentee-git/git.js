@@ -1,4 +1,4 @@
-// Pure parsing for the git output abdh-git reads, with no herdr imports so it
+// Pure parsing for the git output agentee-git reads, with no herdr imports so it
 // stays testable with node.
 //
 // `parseStatus` follows Herdr's shipped `changes` mod's status reader

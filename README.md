@@ -27,12 +27,17 @@ curl -fsSL https://raw.githubusercontent.com/abdh01h/herdr-agentee-theme/main/in
 The installer downloads this repository, backs up every file or folder it replaces
 (`*.bak-<timestamp>`), installs the theme, layout and mods into the Herdr home,
 merges the editor keys while keeping any chord you already use, runs
-`herdr-app check` on each `abdh-*` mod, and switches to the layout when a window
+`herdr-app check` on each `agentee-*` mod, and switches to the layout when a window
 is running.
+
+Updating from the older `abdh` build: the installer also backs up and removes the
+old `mods/abdh-*` folders, moves `abdh-settings.json` → `agentee-settings.json`
+(and `abdh-recovery/` → `agentee-recovery/`), and drops the old
+`mod:abdh-editor` keys section, so settings and dirty-buffer copies carry over.
 
 Options: `-HerdrHome <path>` / `HERDR_APP_HOME`, `-Branch <name>` / `BRANCH`,
 `-NoLayout` / `NO_LAYOUT=1`. On Linux/macOS the key merge needs `python3` or
-`node`; without either, add the `mod:abdh-editor` block from
+`node`; without either, add the `mod:agentee-editor` block from
 `keys.snippet.json` by hand.
 
 ### Install with an agent
@@ -44,7 +49,7 @@ Point any coding agent at the repository and say:
 > me the check/status output.
 
 The repo ships the brief (`AGENT_INSTALL.md`), a root `AGENTS.md`, and a
-Claude Code skill at `.claude/skills/abdh-install/SKILL.md`. With the repository
+Claude Code skill at `.claude/skills/agentee-install/SKILL.md`. With the repository
 as the working project, “install Agentee” is enough. To make the skill available
 from any project, copy that folder to `~/.claude/skills/` (the installer does
 not do this automatically).
@@ -55,12 +60,12 @@ Herdr reads `~/.config/herdr-app` (`$HERDR_APP_HOME` overrides it). Back it up f
 
 1. `themes/agentee.json` → `~/.config/herdr-app/themes/`
 2. `layouts/agentee.json`, `layouts/agentee.svg` → `~/.config/herdr-app/layouts/`
-3. every `mods/abdh-*` folder → `~/.config/herdr-app/mods/`
+3. every `mods/agentee-*` folder → `~/.config/herdr-app/mods/`
 4. merge `keys.snippet.json` into `~/.config/herdr-app/keys.json`
-5. `herdr-app check ~/.config/herdr-app/mods/abdh-<name>` for each folder, then
+5. `herdr-app check ~/.config/herdr-app/mods/agentee-<name>` for each folder, then
    `herdr-app do layout.switch --name agentee`
 
-Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by `abdh-settings` (open it from the sidebar footer → **Theme settings**).
+Models and settings live in `~/.config/herdr-app/agentee-settings.json`, written by `agentee-settings` (open it from the sidebar footer → **Theme settings**).
 
 ## What you get
 
@@ -73,24 +78,24 @@ Models and settings live in `~/.config/herdr-app/abdh-settings.json`, written by
 | Status bar | Folder, branch, ahead/behind, change counts (the open editor file's project root when the editor is focused); file language, lines, chars, words, EOL, encoding, save key |
 | Agents panel | Real agent/token analytics from agent session logs, totals by agent/session/model, history charts |
 | System panel | Real CPU/RAM/GPU/storage/network/battery via OS probes, traffic-light meters, configurable intervals |
-| Settings | `abdh-settings.json`: appearance, tabs, explorer, agents, system, status bar, git, updates; paged theme picker; **Updates** checks `main` by file content and installs from the panel |
+| Settings | `agentee-settings.json`: appearance, tabs, explorer, agents, system, status bar, git, updates; paged theme picker; **Updates** checks `main` by file content and installs from the panel |
 
 ## Keys
 
-Added under `mod:abdh-editor` (active while an editor pane has focus):
+Added under `mod:agentee-editor` (active while an editor pane has focus):
 
 ```json
-"mod:abdh-editor": {
-  "ctrl-s": "abdh-editor.save",
-  "cmd-s": "abdh-editor.save",
-  "ctrl-w": "abdh-editor.close",
-  "cmd-w": "abdh-editor.close",
-  "ctrl-shift-s": "abdh-editor.saveas",
-  "cmd-shift-s": "abdh-editor.saveas"
+"mod:agentee-editor": {
+  "ctrl-s": "agentee-editor.save",
+  "cmd-s": "agentee-editor.save",
+  "ctrl-w": "agentee-editor.close",
+  "cmd-w": "agentee-editor.close",
+  "ctrl-shift-s": "agentee-editor.saveas",
+  "cmd-shift-s": "agentee-editor.saveas"
 }
 ```
 
-The editor also has **Diff**, **Blame**, **Save** and a pane-close button. `abdh-editor.diff` and `abdh-editor.close` are also callable as commands.
+The editor also has **Diff**, **Blame**, **Save** and a pane-close button. `agentee-editor.diff` and `agentee-editor.close` are also callable as commands.
 
 ## Requirements and limits
 
@@ -101,13 +106,13 @@ The editor also has **Diff**, **Blame**, **Save** and a pane-close button. `abdh
 - Remote (ssh machine) files open read-only in the editor.
 - Pane dragging is disabled (`"movable": false`) so the top-center grip never covers content.
 - Herdr's own Settings → Look draws one card per theme file; this repo ships a paged theme picker in **Theme settings → Themes** instead.
-- `abdh-spaces` and `abdh-agents-list` are derived from Herdr's Apache-2.0 `spaces`/`agents` mods; the token scanner in `abdh-agents` is derived from the `insights` mod. See `NOTICE`.
+- `agentee-spaces` and `agentee-agents-list` are derived from Herdr's Apache-2.0 `spaces`/`agents` mods; the token scanner in `agentee-agents` is derived from the `insights` mod. See `NOTICE`.
 
 ## Layout files
 
 - `layouts/agentee.json` — the window tree (left rail, work area, right panel, status bar), theme `agentee`, no pane headers, `movable: false`.
 - `themes/agentee.json` — Carbon palette with `selection` and component colors.
-- `.claude/skills/abdh-theme/SKILL.md` — an agent skill for installing, verifying and modifying this theme.
+- `.claude/skills/agentee-theme/SKILL.md` — an agent skill for installing, verifying and modifying this theme.
 
 ## License
 

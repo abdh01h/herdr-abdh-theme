@@ -1,4 +1,4 @@
-// abdh-agents — agents and token analytics for the Agentee theme.
+// agentee-agents — agents and token analytics for the Agentee theme.
 //
 // Live identity comes from `agents()`/`terminals()`/`panes()`/`spaces()`;
 // token numbers come from provider usage records in the agents' own session
@@ -12,8 +12,8 @@ import { agents, terminals, panes, spaces, theme, exec, appHome, home, shared, w
 
 const DEFAULTS = { enabled: true, interval: 15, showTokens: true, showHistory: true };
 const MIN_INTERVAL = 2;
-const SCRIPT = "mods/abdh-agents/tokens.mjs";
-const CACHE = "data/abdh-agents/tokens-cache.json";
+const SCRIPT = "mods/agentee-agents/tokens.mjs";
+const CACHE = "data/agentee-agents/tokens-cache.json";
 const MATCH_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 function nodeCandidates() {
@@ -26,7 +26,7 @@ function nodeCandidates() {
 }
 
 function agentSettings() {
-  const all = shared("abdh.settings");
+  const all = shared("agentee.settings");
   const value = all && typeof all === "object" && all.agents && typeof all.agents === "object" ? all.agents : {};
   const interval = Number(value.interval);
   return {
@@ -318,13 +318,13 @@ export default class AgentsPanel extends View {
       .child(div().flex_1())
       .when(settings.enabled, (el) => el
         .child(action(
-          "abdh-agents-refresh",
+          "agentee-agents-refresh",
           "Refresh",
           false,
           (_event, cx) => { this.lastScan = 0; this.scan(cx); },
         ))
         .child(action(
-          "abdh-agents-pause",
+          "agentee-agents-pause",
           this.paused ? "Resume" : "Pause",
           this.paused,
           (_event, cx) => { this.paused = !this.paused; if (!this.paused) this.lastScan = 0; cx.notify(); },
@@ -566,7 +566,7 @@ export default class AgentsPanel extends View {
         entry.error ? div().text_size(9).text_color(t.blocked).child(`error: ${entry.error}`) : null,
       ].filter(Boolean));
       return v_flex()
-        .id(`abdh-agent-${a.address}`)
+        .id(`agentee-agent-${a.address}`)
         .w_full()
         .min_w(0)
         .gap(3)
@@ -686,7 +686,7 @@ export default class AgentsPanel extends View {
 
     const body = [];
     if (!settings.enabled) {
-      body.push(this.notice(t, "Agents analytics are disabled in abdh-settings. The live list stays available; tokens and history are not scanned.", t.dim));
+      body.push(this.notice(t, "Agents analytics are disabled in agentee-settings. The live list stays available; tokens and history are not scanned.", t.dim));
     }
     body.push(this.overview(t, counts));
     if (settings.showTokens && settings.enabled) {
@@ -696,7 +696,7 @@ export default class AgentsPanel extends View {
           this.notice(t, `Token data unavailable: ${this.tokensError}`, t.blocked),
           this.sourcesLine(t, { sources: [] }),
           h_flex().gap(6).child(div()
-            .id("abdh-agents-retry")
+            .id("agentee-agents-retry")
             .h(20).px(7).rounded(4).border(1).border_color(t.border).bg(t.surface)
             .flex().items_center().cursor_pointer().hover((style) => style.bg(t.hover))
             .on_click((_event, cx) => this.scan(cx))
@@ -719,7 +719,7 @@ export default class AgentsPanel extends View {
     }
 
     return v_flex()
-      .id("abdh-agents-root")
+      .id("agentee-agents-root")
       .size_full()
       .min_w(0)
       .bg(t.canvas)

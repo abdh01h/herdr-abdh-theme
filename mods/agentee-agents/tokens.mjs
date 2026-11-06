@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Token usage extraction for the abdh-agents panel.
+// Token usage extraction for the agentee-agents panel.
 //
 // Provenance: this is a compact rewrite of the data extraction in
 // `mods/insights/core/scan.mjs` + `mods/insights/core/adapters.mjs`

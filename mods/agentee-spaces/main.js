@@ -31,7 +31,7 @@ const base = (path) => path.replace(/\/+$/, "").split("/").pop();
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 // Edits don't touch .git, so the watch never sees them: re-read every 15 s
-// (and at once on shared("abdh.git.changed"): an editor save, a git action).
+// (and at once on shared("agentee.git.changed"): an editor save, a git action).
 const FALLBACK = 15000;
 
 // What a stored color name looks like on an avatar (the same in every mod
@@ -79,7 +79,7 @@ export default class Spaces extends View {
     const sp = spaces();
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
     const due = this.due(now, sp, panes());
-    const changed = shared("abdh.git.changed") ?? null;
+    const changed = shared("agentee.git.changed") ?? null;
     if (changed !== this.changed) {
       if (this.changed !== undefined) for (const k of Object.keys(this.git)) if (this.git[k]) due.add(k);
       this.changed = changed;
@@ -387,11 +387,11 @@ export default class Spaces extends View {
   // file's project, matching Files, the status bar and the Git overlay.
   projectLabel(w) {
     if (!w.active || w.name !== "~") return null;
-    const project = shared("abdh.project");
+    const project = shared("agentee.project");
     if (!project?.root || project.space !== w.id) return null;
     const name = base(project.root.replace(/\\/g, "/"));
     if (!name || name === "~") return null;
-    const st = shared("abdh.git.status");
+    const st = shared("agentee.git.status");
     const same = st?.cwd && st.cwd.replace(/\\/g, "/") === project.root.replace(/\\/g, "/");
     return { name, git: same ? { ...st, name, repo: name, linked: false } : null };
   }

@@ -21,14 +21,14 @@ const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}`;
 const AGENT = "Agentee-updater";
 
 // Exactly what the installers copy: the theme, the layout pair and every
-// `abdh-*` mod. Generated files an installed mod grows (gpui-kit.d.ts,
+// `agentee-*` mod. Generated files an installed mod grows (gpui-kit.d.ts,
 // jsconfig.json) are not shipped and never read as drift.
 export function shipped(path) {
   return (
     path === "themes/agentee.json" ||
     path === "layouts/agentee.json" ||
     path === "layouts/agentee.svg" ||
-    (path.startsWith("mods/abdh-") && !path.endsWith("/"))
+    (path.startsWith("mods/agentee-") && !path.endsWith("/"))
   );
 }
 
@@ -81,7 +81,7 @@ async function collect(fs, base) {
     return out;
   }
   for (const entry of mods) {
-    if (!entry.isDirectory() || !entry.name.startsWith("abdh-")) continue;
+    if (!entry.isDirectory() || !entry.name.startsWith("agentee-")) continue;
     await walk(fs, `${base}/mods/${entry.name}`, `mods/${entry.name}`, out);
   }
   return out;
@@ -193,8 +193,8 @@ fi
 
 export function script(dir, platform) {
   return platform === "windows"
-    ? { path: `${dir}/abdh-update.ps1`, content: ps(dir) }
-    : { path: `${dir}/abdh-update.sh`, content: sh(dir) };
+    ? { path: `${dir}/agentee-update.ps1`, content: ps(dir) }
+    : { path: `${dir}/agentee-update.sh`, content: sh(dir) };
 }
 
 export async function startInstall({ exec, fs, dir, platform }) {

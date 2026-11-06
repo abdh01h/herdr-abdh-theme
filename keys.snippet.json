@@ -1,12 +1,12 @@
 {
-  "mod:abdh-editor": {
-    "ctrl-s": "abdh-editor.save",
-    "cmd-s": "abdh-editor.save",
-    "ctrl-w": "abdh-editor.close",
-    "cmd-w": "abdh-editor.close",
-    "ctrl-shift-s": "abdh-editor.saveas",
-    "cmd-shift-s": "abdh-editor.saveas",
-    "ctrl-pagedown": "abdh-editor.next",
-    "ctrl-pageup": "abdh-editor.prev"
+  "mod:agentee-editor": {
+    "ctrl-s": "agentee-editor.save",
+    "cmd-s": "agentee-editor.save",
+    "ctrl-w": "agentee-editor.close",
+    "cmd-w": "agentee-editor.close",
+    "ctrl-shift-s": "agentee-editor.saveas",
+    "cmd-shift-s": "agentee-editor.saveas",
+    "ctrl-pagedown": "agentee-editor.next",
+    "ctrl-pageup": "agentee-editor.prev"
   }
 }

@@ -1,6 +1,6 @@
 // Agentee editor: a real file editor in a mod pane.
 // Chrome-like file tabs, save to disk, dirty state, external-change handling,
-// unsaved-change confirmation, and the shared("abdh.editor") stats the status bar reads.
+// unsaved-change confirmation, and the shared("agentee.editor") stats the status bar reads.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState, Input, InputState } from "gpui-base";
 import {
@@ -76,11 +76,11 @@ export default class EditorPane extends View {
     this.files = [];
     this.activeId = null;
     this.untitled = 0;
-    this.lastOpen = shared("abdh.open")?.nonce ?? null;
-    this.lastPick = shared("abdh.editor.pick")?.nonce ?? null;
+    this.lastOpen = shared("agentee.open")?.nonce ?? null;
+    this.lastPick = shared("agentee.editor.pick")?.nonce ?? null;
     // This copy's name for its right-click menu's actions.
     this.key = `${Date.now()}-${Math.random()}`;
-    this.lastMenu = shared("abdh.editor.cmd")?.nonce ?? null;
+    this.lastMenu = shared("agentee.editor.cmd")?.nonce ?? null;
     this.pressed = null;
     this.hovered = null;
     this.pending = null; // { id, kind: "close" | "reload" }
@@ -121,7 +121,7 @@ export default class EditorPane extends View {
 
   myPane() {
     const f = focused();
-    const list = panes().filter((p) => p.mod === "abdh-editor" && p.tab === f?.tab);
+    const list = panes().filter((p) => p.mod === "agentee-editor" && p.tab === f?.tab);
     return list.find((p) => p.pane === f?.pane) ?? (list.length === 1 ? list[0] : null);
   }
 
@@ -137,17 +137,17 @@ export default class EditorPane extends View {
     if (!dirty.length) return;
     try {
       const fs = await import("fs/promises");
-      const dir = `${appHome()}/abdh-recovery`;
+      const dir = `${appHome()}/agentee-recovery`;
       await fs.mkdir(dir, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       for (const [i, f] of dirty.entries()) await fs.writeFile(`${dir}/${f.name}.${stamp}.${i}.txt`, f.text, "utf8");
-      notify({ title: "Unsaved edits recovered", body: `${dirty.length} file(s) in abdh-recovery`, level: "warning", timeout: 8000 });
+      notify({ title: "Unsaved edits recovered", body: `${dirty.length} file(s) in agentee-recovery`, level: "warning", timeout: 8000 });
     } catch { /* the window is closing; nothing else to do */ }
   }
 
   publish() {
     const f = this.active();
-    setShared("abdh.editor", f ? {
+    setShared("agentee.editor", f ? {
       path: f.path, name: f.name, language: f.label, dirty: f.dirty,
       ...stats(f.text), external: Boolean(f.external), error: f.error ?? null,
     } : null);
@@ -197,7 +197,7 @@ export default class EditorPane extends View {
   }
 
   // Theme settings → Wrap long lines; on unless turned off.
-  wrap() { return shared("abdh.settings")?.appearance?.softWrap ?? true; }
+  wrap() { return shared("agentee.settings")?.appearance?.softWrap ?? true; }
 
   // A new EditorState holding `text`: a file's first load, or a setting the
   // state only takes when it is made (wrapping). `gen` gives the element a new
@@ -213,7 +213,7 @@ export default class EditorPane extends View {
       folding: true,
       soft_wrap: this.wrap(),
       font_family: settings().font_family,
-      font_size: shared("abdh.settings")?.appearance?.monoSize ?? 13,
+      font_size: shared("agentee.settings")?.appearance?.monoSize ?? 13,
       syntax: {
         keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4,
         type: t.ansi3, number: t.ansi1, constant: t.ansi6, variable: t.foreground,
@@ -288,7 +288,7 @@ export default class EditorPane extends View {
       f.external = null;
       f.error = null;
       this.notice = `Saved ${f.name}`;
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       this.publish();
       cx.notify();
       return true;
@@ -315,7 +315,7 @@ export default class EditorPane extends View {
       f.error = null;
       this.pending = null;
       this.notice = `Saved ${f.name}`;
-      setShared("abdh.git.changed", Date.now());
+      setShared("agentee.git.changed", Date.now());
       this.publish();
     } catch (e) { f.error = String(e.message ?? e); }
     cx.notify();
@@ -435,7 +435,7 @@ export default class EditorPane extends View {
     const d = this.diffData ?? {};
     const signColor = (s) => (s === "+" ? t.done : s === "-" ? t.blocked : t.dim);
     const gutter = (n) => div().w(34).flex_none().text_size(9.5).text_color(t.dim).child(n == null ? "" : String(n));
-    return v_flex().id("abdh-editor-diff").size_full().min_h(0).text_size(11.5)
+    return v_flex().id("agentee-editor-diff").size_full().min_h(0).text_size(11.5)
       .child(h_flex().h(24).flex_none().px(10).gap(10).items_center().bg(t.chrome).border_b(1).border_color(t.border)
         .child(div().text_size(11).text_color(t.muted).child(`HEAD \u2192 buffer`))
         .when(Boolean(d.file), (el) => el.child(div().text_size(10.5).text_color(t.dim).child(d.file)))
@@ -458,7 +458,7 @@ export default class EditorPane extends View {
   }
 
   consume(cx) {
-    const open = shared("abdh.open");
+    const open = shared("agentee.open");
     if (open && open.nonce !== this.lastOpen) {
       this.lastOpen = open.nonce;
       if (open.tab && this.tab && open.tab !== this.tab) return;
@@ -466,12 +466,12 @@ export default class EditorPane extends View {
       cx.spawn(async (cx) => { await this.open(open.path, cx, open.on ?? null); });
     }
     // A file picked in the open-files menu (ids are this copy's own).
-    const pick = shared("abdh.editor.pick");
+    const pick = shared("agentee.editor.pick");
     if (pick && pick.nonce !== this.lastPick) {
       this.lastPick = pick.nonce;
       if (this.files.some((f) => f.id === pick.id)) this.activate(pick.id, cx);
     }
-    const menu = shared("abdh.editor.cmd");
+    const menu = shared("agentee.editor.cmd");
     if (menu && menu.nonce !== this.lastMenu) {
       this.lastMenu = menu.nonce;
       if (menu.key === this.key) this.menuAction(menu.action, cx);
@@ -494,7 +494,7 @@ export default class EditorPane extends View {
     else if (action === "close") this.requestClose(cx);
     else if (action === "diff") this.toggleDiff(cx);
     else if (action === "files") this.fileMenu();
-    else if (action === "blame" && f?.path) openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(f.path), file: f.path } });
+    else if (action === "blame" && f?.path) openOverlay({ mod: "agentee-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(f.path), file: f.path } });
     cx.notify();
   }
 
@@ -507,19 +507,19 @@ export default class EditorPane extends View {
       const all = keys().filter((b) => b.action === action && b.section === section).map((b) => b.keys);
       return all.find((k) => (mac ? k.includes("cmd-") : !k.includes("cmd-"))) ?? all[0] ?? null;
     };
-    const mine = (label, action, hint = null) => ({ label, hint, shared: "abdh.editor.cmd", value: { key: this.key, action } });
+    const mine = (label, action, hint = null) => ({ label, hint, shared: "agentee.editor.cmd", value: { key: this.key, action } });
     const f = this.active(), pane = this.myPane()?.pane ?? null;
     const items = [];
     // No Cut/Copy/Paste here: a right press moves the caret (the selection is
     // gone before a menu opens), and a mod's window.dispatch_action reaches
     // Herdr's command table, not the text area's input:: actions. The keys work.
     if (f) {
-      items.push(mine("Save", "save", chord("abdh-editor.save", "mod:abdh-editor")));
-      items.push(mine("Save as…", "saveas", chord("abdh-editor.saveas", "mod:abdh-editor")));
+      items.push(mine("Save", "save", chord("agentee-editor.save", "mod:agentee-editor")));
+      items.push(mine("Save as…", "saveas", chord("agentee-editor.saveas", "mod:agentee-editor")));
       items.push(mine(this.diff ? "Back to the editor" : "Diff with HEAD", "diff"));
       if (f.path) items.push(mine("Git blame", "blame"));
       if (this.files.length > 1) items.push(mine("Open files…", "files"));
-      items.push(mine("Close file", "close", chord("abdh-editor.close", "mod:abdh-editor")));
+      items.push(mine("Close file", "close", chord("agentee-editor.close", "mod:agentee-editor")));
     }
     if (pane) {
       if (items.length) items.push({ separator: true });
@@ -531,7 +531,7 @@ export default class EditorPane extends View {
     }
     if (!items.length) return;
     const height = 10 + items.reduce((h, i) => h + (i.separator ? 7 : 28), 0);
-    openOverlay({ mod: "abdh-menu", kind: "popup", width: 250, height, props: { items } });
+    openOverlay({ mod: "agentee-menu", kind: "popup", width: 250, height, props: { items } });
   }
 
   // Every open file in a popup, for when the strip has more than fits.
@@ -539,10 +539,10 @@ export default class EditorPane extends View {
     const items = this.files.map((f) => ({
       label: `${f.dirty ? "● " : ""}${f.name}`,
       hint: f.id === this.activeId ? "open" : base(dirname(f.path ?? "")),
-      shared: "abdh.editor.pick",
+      shared: "agentee.editor.pick",
       value: { id: f.id },
     }));
-    openOverlay({ mod: "abdh-menu", kind: "popup", width: 280, height: Math.min(420, 44 + items.length * 28), props: { title: "Open files", items } });
+    openOverlay({ mod: "agentee-menu", kind: "popup", width: 280, height: Math.min(420, 44 + items.length * 28), props: { title: "Open files", items } });
   }
 
   bar(t, text, tone, buttons) {
@@ -594,12 +594,12 @@ export default class EditorPane extends View {
             .when(on || hot, (el) => el.text_color(t.dim).hover((s) => s.bg(t.raised).text_color(t.foreground))
               .on_mouse_down("left", (_e, ctx) => ctx.stop_propagation())
               .on_click((_e, ctx) => { ctx.stop_propagation(); this.requestClose(ctx, file.id); })
-              .child(svg("mods/abdh-tabs/icons/close.svg").size(10)))));
+              .child(svg("mods/agentee-tabs/icons/close.svg").size(10)))));
     };
     const tool = (id, label) => div().id(id).h(22).px(8).flex().items_center().rounded(4).text_size(11).text_color(t.dim)
       .hover((s) => s.bg(t.hover).text_color(t.foreground)).child(label);
 
-    return v_flex().id("abdh-editor").size_full().min_h(0).bg(t.background).text_size(12.5).text_color(t.foreground)
+    return v_flex().id("agentee-editor").size_full().min_h(0).bg(t.background).text_size(12.5).text_color(t.foreground)
       .track_focus(this.handle)
       .on_mouse_down("right", (_e, ctx) => { ctx.stop_propagation(); this.paneMenu(); })
       .on_key_down((e, ctx) => {
@@ -619,13 +619,13 @@ export default class EditorPane extends View {
           .child(tool("ed-blame", "Blame")
             .on_click(() => {
               const file = this.active();
-              if (file?.path) openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(file.path), file: file.path } });
+              if (file?.path) openOverlay({ mod: "agentee-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(file.path), file: file.path } });
             }))
           .child(tool("ed-save", "Save").on_click((_e, ctx) => ctx.spawn(async (cx) => { await this.save(cx); })))
           .child(div().id("ed-close-pane").size(22).flex_none().flex().items_center().justify_center().rounded(4)
             .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
             .tooltip("Close the editor pane").on_click(() => this.closePane())
-            .child(svg("mods/abdh-tabs/icons/close.svg").size(11)))))
+            .child(svg("mods/agentee-tabs/icons/close.svg").size(11)))))
       .when(Boolean(this.notice), (el) => el.child(this.bar(t, this.notice, t.ansi2, [["Dismiss", "dim", (_e, ctx) => { this.notice = null; ctx.notify(); }]])))
       .when(Boolean(f?.error), (el) => el.child(this.bar(t, f.error, t.blocked, [
         ["Overwrite", "primary", (_e, ctx) => ctx.spawn(async (cx) => { await this.overwrite(cx); })],

@@ -10,15 +10,15 @@ import {
 const PER_FOLDER = 600, TOTAL = 6000, SEARCH_LIMIT = 1500;
 
 const DEFAULTS = { explorer: { icons: true, gitColors: true, hiddenFiles: false, expanded: 1 } };
-const settings = () => ({ ...DEFAULTS, ...(shared("abdh.settings") ?? {}) });
+const settings = () => ({ ...DEFAULTS, ...(shared("agentee.settings") ?? {}) });
 
 function editorFile() {
   const space = spaces().find((s) => s.active);
   if (space?.machine) return null;
   const f = focused();
   const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
-  if (pane?.mod !== "abdh-editor") return null;
-  const open = shared("abdh.editor");
+  if (pane?.mod !== "agentee-editor") return null;
+  const open = shared("agentee.editor");
   return open?.path ? open : null;
 }
 
@@ -31,8 +31,8 @@ function location(followCwd = null) {
   // An editor pane shows a file; follow that file's project root when it is the
   // focused pane. The tab's terminal may be somewhere else (often home), and
   // following it made Files jump away from the file the person was editing.
-  const open = shared("abdh.editor");
-  if (open?.path && pane?.mod === "abdh-editor" && !space?.machine && followCwd) {
+  const open = shared("agentee.editor");
+  if (open?.path && pane?.mod === "agentee-editor" && !space?.machine && followCwd) {
     return { cwd: followCwd, on: null, space: space?.id, tab: f?.tab };
   }
   // A mod pane with no file (or no focus): follow the tab's terminal instead,
@@ -84,7 +84,7 @@ const TYPE = {
 };
 
 function badge(entry, t) {
-  if (entry.dir) return svg("mods/abdh-explorer/icons/folder.svg").size(14).flex_none().text_color(t.muted);
+  if (entry.dir) return svg("mods/agentee-explorer/icons/folder.svg").size(14).flex_none().text_color(t.muted);
   const name = entry.name.toLowerCase();
   const ext = name.endsWith(".blade.php") ? "blade" : name.split(".").pop();
   const [label, color] = TYPE[ext] ?? [ext.slice(0, 3).toUpperCase() || "·", t.dim];
@@ -333,34 +333,34 @@ export default class Explorer extends View {
   // ---- shared actions from the menu / dialogs -----------------------------
   consume(cx) {
     if (props()?.dialog) return;
-    // abdh.open is the editor's inbox (openFile writes it); reading it here too
+    // agentee.open is the editor's inbox (openFile writes it); reading it here too
     // re-opened the file on every tick.
-    const cmd = shared("abdh.explorer.cmd");
+    const cmd = shared("agentee.explorer.cmd");
     if (!cmd || cmd.nonce === this.lastCmd) return;
     this.lastCmd = cmd.nonce;
     // One shot per click/menu choice: a reloaded or cloned copy must not replay it.
-    setShared("abdh.explorer.cmd", null);
+    setShared("agentee.explorer.cmd", null);
     const root = cmd.root ?? this.root;
     if (cmd.action === "open") this.openFile(cmd.path);
     else if (cmd.action === "reveal") this.shell("reveal", cmd.path).catch((e) => notify({ title: "Reveal failed", body: String(e.message), level: "error" }));
-    else if (cmd.action === "blame") openOverlay({ mod: "abdh-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(cmd.path), file: cmd.path } });
+    else if (cmd.action === "blame") openOverlay({ mod: "agentee-git", kind: "dialog", width: 640, height: 620, props: { root: dirname(cmd.path), file: cmd.path } });
     else if (cmd.action === "refresh") { this.entries.clear(); this.folders.clear(); this.load("", cx); this.loadGit(cx); }
     else if (cmd.action === "paste") this.paste(cmd.dir ?? dirname(cmd.path), cx);
-    else if (cmd.action === "copy" || cmd.action === "cut") setShared("abdh.clipboard", { path: cmd.path, cut: cmd.action === "cut" });
+    else if (cmd.action === "copy" || cmd.action === "cut") setShared("agentee.clipboard", { path: cmd.path, cut: cmd.action === "cut" });
     else if (["new", "rename", "delete"].includes(cmd.action)) {
-      openOverlay({ mod: "abdh-explorer", kind: "dialog", width: 420, height: 210,
+      openOverlay({ mod: "agentee-explorer", kind: "dialog", width: 420, height: 210,
         props: { dialog: cmd.action, kind: cmd.kind, root, path: cmd.path, dir: cmd.dir } });
     }
   }
 
   async paste(dir, cx) {
-    const clip = shared("abdh.clipboard");
+    const clip = shared("agentee.clipboard");
     if (!clip) return;
     const src = norm(clip.path).replace(/\/+$/, "").toLowerCase(), into = norm(dir).replace(/\/+$/, "").toLowerCase();
     if (into === src || into.startsWith(src + "/")) { notify({ title: "Paste failed", body: "Cannot paste a folder into itself", level: "error" }); return; }
     try {
       await this.shell("copy", clip.path, join(dir, base(clip.path)));
-      if (clip.cut) { await this.shell("remove", clip.path); setShared("abdh.clipboard", null); }
+      if (clip.cut) { await this.shell("remove", clip.path); setShared("agentee.clipboard", null); }
       notify({ title: clip.cut ? "Moved" : "Copied", body: base(clip.path), level: "success" });
     } catch (e) { notify({ title: "Paste failed", body: String(e.message), level: "error" }); }
     this.entries.clear(); this.folders.clear(); this.load("", cx); this.loadGit(cx);
@@ -368,9 +368,9 @@ export default class Explorer extends View {
 
   openFile(path) {
     const tab = focused()?.tab;
-    const pane = panes().find((p) => p.mod === "abdh-editor" && p.tab === tab);
-    if (pane) { setShared("abdh.open", { path, root: this.root, on: this.on ?? null, tab, nonce: `${Date.now()}-${Math.random()}` }); run("pane.focus", { pane: pane.pane }); return; }
-    run("pane.split", { direction: "right", mod: "abdh-editor", props: { path, root: this.root, on: this.on ?? null } });
+    const pane = panes().find((p) => p.mod === "agentee-editor" && p.tab === tab);
+    if (pane) { setShared("agentee.open", { path, root: this.root, on: this.on ?? null, tab, nonce: `${Date.now()}-${Math.random()}` }); run("pane.focus", { pane: pane.pane }); return; }
+    run("pane.split", { direction: "right", mod: "agentee-editor", props: { path, root: this.root, on: this.on ?? null } });
   }
 
   // ---- search -------------------------------------------------------------
@@ -452,32 +452,32 @@ export default class Explorer extends View {
 
   // ---- menu ---------------------------------------------------------------
   menu(rel, dir, cx, right) {
-    const abs = this.abs(rel), clip = shared("abdh.clipboard");
+    const abs = this.abs(rel), clip = shared("agentee.clipboard");
     const items = dir
       ? [
-        { label: "New file…", shared: "abdh.explorer.cmd", value: { action: "new", kind: "file", dir: abs, root: this.root } },
-        { label: "New folder…", shared: "abdh.explorer.cmd", value: { action: "new", kind: "folder", dir: abs, root: this.root } },
+        { label: "New file…", shared: "agentee.explorer.cmd", value: { action: "new", kind: "file", dir: abs, root: this.root } },
+        { label: "New folder…", shared: "agentee.explorer.cmd", value: { action: "new", kind: "folder", dir: abs, root: this.root } },
         { separator: true },
-        { label: "Rename…", shared: "abdh.explorer.cmd", value: { action: "rename", path: abs, root: this.root } },
-        { label: "Copy", shared: "abdh.explorer.cmd", value: { action: "copy", path: abs } },
-        { label: "Cut", shared: "abdh.explorer.cmd", value: { action: "cut", path: abs } },
-        ...(clip ? [{ label: `Paste ${base(clip.path)}`, shared: "abdh.explorer.cmd", value: { action: "paste", dir: abs } }] : []),
-        { label: "Reveal", shared: "abdh.explorer.cmd", value: { action: "reveal", path: abs } },
+        { label: "Rename…", shared: "agentee.explorer.cmd", value: { action: "rename", path: abs, root: this.root } },
+        { label: "Copy", shared: "agentee.explorer.cmd", value: { action: "copy", path: abs } },
+        { label: "Cut", shared: "agentee.explorer.cmd", value: { action: "cut", path: abs } },
+        ...(clip ? [{ label: `Paste ${base(clip.path)}`, shared: "agentee.explorer.cmd", value: { action: "paste", dir: abs } }] : []),
+        { label: "Reveal", shared: "agentee.explorer.cmd", value: { action: "reveal", path: abs } },
         { separator: true },
-        { label: "Delete…", danger: true, shared: "abdh.explorer.cmd", value: { action: "delete", path: abs, dir: true, root: this.root } },
+        { label: "Delete…", danger: true, shared: "agentee.explorer.cmd", value: { action: "delete", path: abs, dir: true, root: this.root } },
       ]
       : [
-        { label: "Open", shared: "abdh.explorer.cmd", value: { action: "open", path: abs } },
-        { label: "Rename…", shared: "abdh.explorer.cmd", value: { action: "rename", path: abs, root: this.root } },
-        { label: "Copy", shared: "abdh.explorer.cmd", value: { action: "copy", path: abs } },
-        { label: "Cut", shared: "abdh.explorer.cmd", value: { action: "cut", path: abs } },
-        ...(clip ? [{ label: `Paste ${base(clip.path)}`, shared: "abdh.explorer.cmd", value: { action: "paste", dir: dirname(abs) } }] : []),
-        { label: "Git blame", shared: "abdh.explorer.cmd", value: { action: "blame", path: abs, root: this.root } },
-        { label: "Reveal", shared: "abdh.explorer.cmd", value: { action: "reveal", path: abs } },
+        { label: "Open", shared: "agentee.explorer.cmd", value: { action: "open", path: abs } },
+        { label: "Rename…", shared: "agentee.explorer.cmd", value: { action: "rename", path: abs, root: this.root } },
+        { label: "Copy", shared: "agentee.explorer.cmd", value: { action: "copy", path: abs } },
+        { label: "Cut", shared: "agentee.explorer.cmd", value: { action: "cut", path: abs } },
+        ...(clip ? [{ label: `Paste ${base(clip.path)}`, shared: "agentee.explorer.cmd", value: { action: "paste", dir: dirname(abs) } }] : []),
+        { label: "Git blame", shared: "agentee.explorer.cmd", value: { action: "blame", path: abs, root: this.root } },
+        { label: "Reveal", shared: "agentee.explorer.cmd", value: { action: "reveal", path: abs } },
         { separator: true },
-        { label: "Delete…", danger: true, shared: "abdh.explorer.cmd", value: { action: "delete", path: abs, root: this.root } },
+        { label: "Delete…", danger: true, shared: "agentee.explorer.cmd", value: { action: "delete", path: abs, root: this.root } },
       ];
-    openOverlay({ mod: "abdh-menu", kind: "popup", at: "pointer", width: 220, props: { items, title: base(abs) } });
+    openOverlay({ mod: "agentee-menu", kind: "popup", at: "pointer", width: 220, props: { items, title: base(abs) } });
   }
 
   // ---- render -------------------------------------------------------------
@@ -519,7 +519,7 @@ export default class Explorer extends View {
           cx.notify();
         })
         .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu(path, entry.dir, cx, true); })
-        .when(entry.dir, (el) => el.child(svg(`mods/abdh-explorer/icons/chevron-${open ? "down" : "right"}.svg`).size(11).flex_none().text_color(t.dim)))
+        .when(entry.dir, (el) => el.child(svg(`mods/agentee-explorer/icons/chevron-${open ? "down" : "right"}.svg`).size(11).flex_none().text_color(t.dim)))
         .when(!entry.dir, (el) => el.child(div().w(11).flex_none()))
         .when(settings().explorer.icons, (el) => el.child(badge(entry, t)))
         .child(div().flex_1().min_w(0).truncate().text_color(entry.dir ? t.muted : t.foreground).child(entry.name))
@@ -536,22 +536,22 @@ export default class Explorer extends View {
       .rounded(4).text_color(on ? t.accent : t.dim).hover((x) => x.bg(t.hover).text_color(t.foreground))
       .tooltip(tip).on_click(action).child(svg(icon).size(13));
     const newMenu = () => openOverlay({
-      mod: "abdh-menu", kind: "popup", at: "pointer", width: 200,
+      mod: "agentee-menu", kind: "popup", at: "pointer", width: 200,
       props: { items: [
-        { label: "New file…", shared: "abdh.explorer.cmd", value: { action: "new", kind: "file", dir: this.root, root: this.root } },
-        { label: "New folder…", shared: "abdh.explorer.cmd", value: { action: "new", kind: "folder", dir: this.root, root: this.root } },
+        { label: "New file…", shared: "agentee.explorer.cmd", value: { action: "new", kind: "file", dir: this.root, root: this.root } },
+        { label: "New folder…", shared: "agentee.explorer.cmd", value: { action: "new", kind: "folder", dir: this.root, root: this.root } },
         { separator: true },
-        { label: "Refresh", shared: "abdh.explorer.cmd", value: { action: "refresh", root: this.root } },
+        { label: "Refresh", shared: "agentee.explorer.cmd", value: { action: "refresh", root: this.root } },
       ] },
     });
     return h_flex().h(32).flex_none().px(8).gap(6).items_center().border_b(1).border_color(t.border)
       .child(div().flex_1().min_w(0).truncate().font_semibold().text_color(t.muted).child(this.root ? base(this.root) : "Files"))
-      .child(iconButton("x-search", "mods/abdh-chrome/icons/search.svg", "Search files", () => {
+      .child(iconButton("x-search", "mods/agentee-chrome/icons/search.svg", "Search files", () => {
         this.search = !this.search;
         if (!this.search) { this.query = ""; this.results = null; }
         cx.notify();
       }, this.search))
-      .child(iconButton("x-new", "mods/abdh-chrome/icons/plus.svg", "New file or folder", newMenu, false));
+      .child(iconButton("x-new", "mods/agentee-chrome/icons/plus.svg", "New file or folder", newMenu, false));
   }
 
   searchBar(t, cx) {
@@ -566,7 +566,7 @@ export default class Explorer extends View {
     const g = this.git;
     const count = (id, n, text, color) => div().id(id).flex_none().text_color(color).child(text);
     return h_flex().px(10).h(26).flex_none().gap(8).items_center().border_b(1).border_color(t.border).text_size(11)
-      .child(svg("mods/abdh-status/icons/branch.svg").size(11).flex_none().text_color(t.dim))
+      .child(svg("mods/agentee-status/icons/branch.svg").size(11).flex_none().text_color(t.dim))
       .child(div().text_color(t.muted).child(g.branch))
       .when(g.counts.modified > 0, (x) => x.child(count("gm", g.counts.modified, `${g.counts.modified}~`, t.ansi3)))
       .when(g.counts.added > 0, (x) => x.child(count("ga", g.counts.added, `+${g.counts.added}`, t.ansi2)))
@@ -575,7 +575,7 @@ export default class Explorer extends View {
       .when(g.counts.conflicted > 0, (x) => x.child(count("gc", g.counts.conflicted, `${g.counts.conflicted}!`, t.blocked)))
       .child(div().flex_1())
       .child(div().id("x-git").text_color(t.dim).hover((x) => x.text_color(t.foreground))
-        .on_click(() => openOverlay({ mod: "abdh-git", kind: "dialog", width: 520, height: 520, props: { root: this.root } }))
+        .on_click(() => openOverlay({ mod: "agentee-git", kind: "dialog", width: 520, height: 520, props: { root: this.root } }))
         .child("branches…"));
   }
 
@@ -616,7 +616,7 @@ export default class Explorer extends View {
       if (!this.dialog) this.startDialog();
       return this.dialogView(t);
     }
-    const root = v_flex().id("abdh-explorer").size_full().min_h(0).bg(t.chrome).text_size(12.5).text_color(t.foreground);
+    const root = v_flex().id("agentee-explorer").size_full().min_h(0).bg(t.chrome).text_size(12.5).text_color(t.foreground);
     root.child(this.header(t, cx));
     root.child(this.searchBar(t, cx));
     if (this.git && settings().explorer.gitColors) root.child(this.gitStrip(t));
