@@ -194,7 +194,7 @@ export default class Explorer extends View {
     const cmds = {
       mkdir: `mkdir -p '${sh(a)}'`,
       remove: `rm -rf '${sh(a)}'`,
-      rename: `mv '${sh(a)}' '${join(dirname(a), sh(b))}'`,
+      rename: `mv '${sh(a)}' '${sh(join(dirname(a), b))}'`,
       copy: `cp -R '${sh(a)}' '${sh(b)}'`,
       reveal: window()?.platform === "macos" ? `open -R '${sh(a)}'` : `xdg-open '${sh(dirname(a))}'`,
     };

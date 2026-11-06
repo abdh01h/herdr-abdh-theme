@@ -57,6 +57,7 @@ Type: JetBrains Mono 13 for terminals/editor, Geist for chrome. Palette: backgro
 - Layout ids must stay unique (`panel-agents` vs `agents`); a collision moved the token panel into the left rail.
 - `movable: false` removes the pane drag grip. Splitting/zooming/closing still works via keys and the terminal menu.
 - Search must stay bounded: at `~` content search is off; repos use single-threaded `git grep`; ripgrep is capped to 2 threads/depth 12. Unbounded scans spike all cores.
+- Escape whole paths in shell strings, never fragments: `mv '${sh(a)}' '${sh(join(dirname(a), b))}'`. A folder named `x'; id; '` inside a cloned repo ran `id` when a file in it was renamed, because only the new name was escaped and the raw directory sat inside the quoted destination. The Windows branch was safe (`q()` wraps the complete path in a PowerShell literal). A `git`/`rg` call needs an argument array, or `-e`/`--` before anything that came from a file name or a branch.
 - Dialog copies of `agentee-explorer` must not start watchers or consume shared commands, and commands are one-shot (cleared from `shared`), or hot reloads spawn overlay floods.
 - Remote (ssh) files open read-only; only local writes are supported.
 - The old panel-bar mod is gone; the window bar in `agentee-tabs` owns the tools and is the only place that shows panel state.
