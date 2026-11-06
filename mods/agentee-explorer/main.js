@@ -299,7 +299,7 @@ export default class Explorer extends View {
         const top = await exec("git", ["-C", root, "rev-parse", "--show-toplevel"], { on }).catch(() => null);
         if (!top || top.code !== 0) { if (this.root === root) this.git = null; return; }
         const repo = norm(top.stdout.trim());
-        const st = await exec("git", ["-C", root, "--no-optional-locks", "status", "--porcelain=v1", "-z", "-uall"], { on });
+        const st = await exec("git", ["-C", root, "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "-uall"], { on });
         const marks = new Map(), counts = { modified: 0, added: 0, deleted: 0, staged: 0, conflicted: 0 };
         const fields = st.stdout.split("\0");
         for (let i = 0; i < fields.length; i++) {
@@ -422,7 +422,7 @@ export default class Explorer extends View {
           const rg = await exec("rg", ["--json", "--fixed-strings", "--smart-case", "--hidden", "-I", "-j", "2", "--max-depth", "12",
             "--max-count", "1", "--max-filesize", "1M", "--no-messages",
             "--glob", "!**/.git/**", "--glob", "!**/node_modules/**", "--glob", "!**/vendor/**", "--glob", "!**/dist/**", "--glob", "!**/build/**",
-            term, root], { on }).catch(() => null);
+            "--", term, root], { on }).catch(() => null);
           if (rg && (rg.code === 0 || rg.code === 1)) {
             for (const line of rg.stdout.split("\n")) {
               if (!line) continue;

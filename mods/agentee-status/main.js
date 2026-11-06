@@ -105,7 +105,7 @@ export default class Status extends View {
     const on = (spaces().find((s) => s.id === f?.space) ?? spaces().find((s) => s.active))?.machine ?? undefined;
     this.inflight = true;
     cx.spawn(async (cx) => {
-      const r = await exec("git", ["--no-optional-locks", "status", "--porcelain=v2", "--branch"], { cwd, on }).catch(() => null);
+      const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch"], { cwd, on }).catch(() => null);
       this.inflight = false;
       if (this.cwd !== cwd) return;
       this.setGit(r && r.code === 0 ? { cwd, ...parseStatus(r.stdout) } : null);
