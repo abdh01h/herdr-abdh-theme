@@ -573,6 +573,18 @@ export default class AgenteeGit extends View {
   }
 
   // Opening a changed file retires the dialog, so the editor is not covered.
+  // The editor to open into: one in this tab, else the focused one, else any in
+  // the space (select its tab). Looking only at the focused tab split a new
+  // editor pane for every click, so each file ended up in its own pane and the
+  // pane in view never grew a second file tab.
+  editorPane() {
+    const space = spaces().find((s) => s.active);
+    const tabs = new Set((space?.tabs ?? []).map((t) => t.id));
+    const here = focused()?.tab ?? null;
+    const editors = panes().filter((p) => p.mod === "agentee-editor" && tabs.has(p.tab));
+    return editors.find((p) => p.tab === here) ?? editors.find((p) => p.focused) ?? editors[0] ?? null;
+  }
+
   openChanged(entry, cx) {
     const root = this.state.root;
     if (!root || this.busy) return;
@@ -582,15 +594,16 @@ export default class AgenteeGit extends View {
       return;
     }
     const path = this.changedPath(entry);
-    const tab = focused()?.tab ?? null;
-    const pane = panes().find((p) => p.mod === "agentee-editor" && p.tab === tab);
-    if (pane) {
-      setShared("agentee.open", { path, root, on: null, tab, nonce: `${Date.now()}-${Math.random()}` });
-      run("pane.focus", { pane: pane.pane });
+    const target = this.editorPane();
+    // Retire the dialog/pane first; it owns the focus the open request needs.
+    this.dismiss();
+    if (target) {
+      if (target.tab !== focused()?.tab) run("tab.select", { id: target.tab });
+      setShared("agentee.open", { path, root, on: null, tab: target.tab, nonce: `${Date.now()}-${Math.random()}` });
+      run("pane.focus", { pane: target.pane });
     } else {
       run("pane.split", { direction: "right", mod: "agentee-editor", props: { path, root, on: null } });
     }
-    this.dismiss();
   }
 
   stage(entry, cx) {

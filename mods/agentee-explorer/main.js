@@ -367,9 +367,19 @@ export default class Explorer extends View {
   }
 
   openFile(path) {
-    const tab = focused()?.tab;
-    const pane = panes().find((p) => p.mod === "agentee-editor" && p.tab === tab);
-    if (pane) { setShared("agentee.open", { path, root: this.root, on: this.on ?? null, tab, nonce: `${Date.now()}-${Math.random()}` }); run("pane.focus", { pane: pane.pane }); return; }
+    const space = spaces().find((s) => s.active);
+    const tabs = new Set((space?.tabs ?? []).map((t) => t.id));
+    const here = focused()?.tab ?? null;
+    const editors = panes().filter((p) => p.mod === "agentee-editor" && tabs.has(p.tab));
+    // Any editor in the space, not just this tab's: a click from a panel that
+    // is not the focused pane would otherwise split another editor every time.
+    const pane = editors.find((p) => p.tab === here) ?? editors.find((p) => p.focused) ?? editors[0] ?? null;
+    if (pane) {
+      if (pane.tab !== here) run("tab.select", { id: pane.tab });
+      setShared("agentee.open", { path, root: this.root, on: this.on ?? null, tab: pane.tab, nonce: `${Date.now()}-${Math.random()}` });
+      run("pane.focus", { pane: pane.pane });
+      return;
+    }
     run("pane.split", { direction: "right", mod: "agentee-editor", props: { path, root: this.root, on: this.on ?? null } });
   }
 

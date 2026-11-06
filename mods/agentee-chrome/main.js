@@ -64,12 +64,18 @@ export default class Chrome extends View {
         // The editor paints its line-number gutter with Base `surface`. A light
         // Base palette leaves a white strip beside dark code, so pin the tokens
         // the editor falls back to onto the theme's own dark colours too.
+        // The shell's hover label (gpui-shell's `TooltipLabel`) paints its box
+        // with Base `surface` and its text with Base `surface_foreground`, so
+        // pinning `surface` without its ink left the label dark on dark: every
+        // tooltip was an empty rounded box. `surface` is the code background
+        // here, so its foreground is the theme's text colour.
         const colors = {
           ...base.colors,
           accent: app.accent,
           selection: app.selection || app.accent,
           border: "#00000000",
           surface: app.background,
+          surface_foreground: app.foreground,
           background: app.background,
           foreground: app.foreground,
           muted_foreground: app.dim,
