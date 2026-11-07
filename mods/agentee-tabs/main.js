@@ -17,8 +17,10 @@ function find(node, id) {
 }
 
 // A tab lives in a space, and tab.new from a mod with none open fails ("no
-// space yet: make one first"). Every click that wants a tab gets the space it
-// needs first: a window with no space still opens a tab.
+// space yet: make one first"). Actions that make a tab right away get the
+// space they need first. The + is not one of them: it only opens the picker,
+// and the choice there makes the space (agentee-new-menu), so the click never
+// leaves a stray terminal behind.
 function ensureSpace() {
   if (!spaces().some((s) => s.active)) run("space.new");
 }
@@ -137,7 +139,7 @@ export default class Tabs extends View {
       .bg("#00000000").text_color(t.dim).text_size(18).cursor_pointer()
       .hover((x) => x.bg(t.hover).text_color(t.accent))
       .tooltip("New tab: pick a terminal or an agent")
-      .on_mouse_down("left", stop).on_click(() => { ensureSpace(); openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 }); })
+      .on_mouse_down("left", stop).on_click(() => openOverlay({ mod: "agentee-new-menu", kind: "popup", width: 250, height: 512 }))
       .child("+");
 
     const root = layout(), sidebar = find(root, "sidebar"), w = window();

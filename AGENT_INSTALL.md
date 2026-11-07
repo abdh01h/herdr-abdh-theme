@@ -70,7 +70,7 @@ Copy from a checkout/archive of this repository into the Herdr home:
 
 Never edit `frame/` (Herdr rewrites it at startup) and never edit Herdr's shipped
 mods (`spaces`, `agents`, `menu`, `new-menu`, `pane`, `picker`) — the theme uses
-its own `agentee-spaces` and `agentee-agents-list`.
+its own `agentee-spaces`, `agentee-agents-list` and `agentee-new-menu`.
 
 ## 4. Report
 

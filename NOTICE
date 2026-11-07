@@ -10,10 +10,12 @@ Herdr (https://github.com/herdrdev/herdr-app), Apache License 2.0.
 
 - mods/agentee-spaces is a fork of Herdr's default `spaces` mod.
 - mods/agentee-agents-list is a fork of Herdr's default `agents` mod.
+- mods/agentee-new-menu is a fork of Herdr's default `new-menu` mod.
 - mods/agentee-agents/tokens.mjs derives from Herdr's `insights` token scanner
   (mods/insights/analytics.js) and reads the user's own agent session logs.
 - Icon shapes follow Lucide icons (ISC) as used by Herdr.
 
 Changes from the originals are limited to styling, layout ids, empty-machine
-row handling, and the self-opening sort menu name. The Apache-2.0 license and
-this notice apply to the derived files.
+row handling, the self-opening sort menu name, and the new-tab menu creating
+the space with the chosen terminal instead of before the picker opens. The
+Apache-2.0 license and this notice apply to the derived files.

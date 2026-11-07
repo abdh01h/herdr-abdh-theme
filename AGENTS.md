@@ -11,8 +11,8 @@ This repository is a Herdr **layout bundle** (layout + theme + personal mods).
   traps. Verify with `herdr-app check <mod>` for every changed mod and a real
   window render (`herdr-app shot`).
 - Do not edit `frame/` or Herdr's shipped mods (`spaces`, `agents`, `menu`,
-  `new-menu`, `pane`, `picker`); `agentee-spaces` and `agentee-agents-list` are the
-  editable forks.
+  `new-menu`, `pane`, `picker`); `agentee-spaces`, `agentee-agents-list` and
+  `agentee-new-menu` are the editable forks.
 - Never fabricate metrics: temperatures need LibreHardwareMonitor, blame is
   whole-file, diff is a separate view.
 - Keep the published GitHub topic `herdr-layout`; update `preview.png` when the
